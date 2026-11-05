@@ -157,5 +157,4 @@ resume, interruption, draft preservation, and one approval for a harmless
 `Write-Output` command. They use a scratch workspace under `.artifacts/` and
 restore the original project metadata. Do not enable the debug port for normal use.
 
-`scripts/sidebar-smoke.py` was written for an earlier sidebar design and is out of date.
 See [SHADCN-LICENSE.md](SHADCN-LICENSE.md) for the upstream component license.

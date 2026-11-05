@@ -339,6 +339,7 @@ export function App() {
           engineLabel={engine.status === 'ready' ? 'Connected' : engine.status}
           enginePath={engine.info?.binary}
           onReconnect={reconnect}
+          onGatewayChanged={() => void codex.restart().catch(codex.report)}
         />
         <NewProjectDialog open={newProjectOpen} onOpenChange={setNewProjectOpen} onCreate={createProject} />
         <ConfirmDeleteDialog target={pendingDelete} onCancel={() => setPendingDelete(null)} onConfirm={confirmDelete} />

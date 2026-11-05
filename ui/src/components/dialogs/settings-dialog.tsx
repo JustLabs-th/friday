@@ -13,6 +13,8 @@ interface SettingsDialogProps {
   engineLabel?: string;
   enginePath?: string;
   onReconnect?: () => void;
+  /** The gateway sign-in changed, so the engine has to restart to pick it up. */
+  onGatewayChanged?: () => void;
 }
 
 function SettingRow({ label, description, children }: { label: string; description?: string; children: ReactNode }) {
@@ -32,12 +34,20 @@ interface Section {
   label: string;
   icon: LucideIcon;
   render: (
-    props: Pick<SettingsDialogProps, 'dark' | 'onSetDark' | 'engineLabel' | 'enginePath' | 'onReconnect'>,
+    props: Pick<
+      SettingsDialogProps,
+      'dark' | 'onSetDark' | 'engineLabel' | 'enginePath' | 'onReconnect' | 'onGatewayChanged'
+    >,
   ) => ReactNode;
 }
 
 const sections: Section[] = [
-  { id: 'account', label: 'Account', icon: User, render: () => <GatewayAccount /> },
+  {
+    id: 'account',
+    label: 'Account',
+    icon: User,
+    render: ({ onGatewayChanged }) => <GatewayAccount onChanged={onGatewayChanged} />,
+  },
   {
     id: 'appearance',
     label: 'Appearance',
@@ -87,6 +97,7 @@ export function SettingsDialog({
   engineLabel,
   enginePath,
   onReconnect,
+  onGatewayChanged,
 }: SettingsDialogProps) {
   const [query, setQuery] = useState('');
   const [activeId, setActiveId] = useState(sections[0].id);
@@ -137,7 +148,7 @@ export function SettingsDialog({
           </nav>
           <div className="min-w-0 flex-1 overflow-y-auto p-6">
             <h2 className="mb-2 text-base font-semibold">{active.label}</h2>
-            {active.render({ dark, onSetDark, engineLabel, enginePath, onReconnect })}
+            {active.render({ dark, onSetDark, engineLabel, enginePath, onReconnect, onGatewayChanged })}
           </div>
         </div>
       </DialogContent>

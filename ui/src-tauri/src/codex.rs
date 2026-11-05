@@ -129,6 +129,10 @@ pub async fn codex_connect(app: AppHandle, bridge: State<'_, Bridge>) -> Result<
         .trim_start_matches("\\\\?\\")
         .to_owned();
     let mut command = Command::new(&binary);
+    // Signed in to the company gateway: point this Codex run at it (nothing is written to ~/.codex).
+    if let Some((args, key)) = crate::gateway_auth::codex_launch(&app) {
+        command.args(args).env(crate::gateway_auth::GATEWAY_KEY_ENV, key);
+    }
     command
         .args(["app-server", "--listen", "stdio://"])
         .current_dir(&cwd)

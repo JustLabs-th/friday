@@ -66,6 +66,39 @@ pub fn stored_key() -> Option<String> {
     entry().ok()?.get_password().ok()
 }
 
+const CATALOG: &str = include_str!("../resources/gateway-catalog.json");
+const GATEWAY_MODEL: &str = "llama/qwen3.8-27b";
+
+/// What Codex needs to use the gateway: command-line settings that override its config for this run
+/// only (the user's `~/.codex/config.toml` is untouched) and the key as an environment variable.
+/// `None` when nobody is signed in, so Codex runs with its usual configuration.
+pub fn codex_launch(app: &AppHandle) -> Option<(Vec<String>, String)> {
+    let key = stored_key()?;
+    let dir = app.path().app_data_dir().ok()?;
+    std::fs::create_dir_all(&dir).ok()?;
+    let catalog = dir.join("gateway-catalog.json");
+    std::fs::write(&catalog, CATALOG).ok()?;
+    let base = std::env::var("FRIDAY_GATEWAY_URL").unwrap_or_else(|_| "https://bifrost.digitalx.srt/v1".into());
+    let path = catalog.to_string_lossy().trim_start_matches(r"\\?\").replace('\\', "/");
+    let q = |v: &str| serde_json::to_string(v).unwrap_or_default();
+    let mut args = Vec::new();
+    for setting in [
+        format!("model_provider={}", q("friday_gateway")),
+        format!("model={}", q(GATEWAY_MODEL)),
+        format!("model_catalog_json={}", q(&path)),
+        format!("model_providers.friday_gateway.name={}", q("Company gateway")),
+        format!("model_providers.friday_gateway.base_url={}", q(&base)),
+        format!("model_providers.friday_gateway.env_key={}", q(GATEWAY_KEY_ENV)),
+        format!("model_providers.friday_gateway.wire_api={}", q("responses")),
+    ] {
+        args.push("-c".to_string());
+        args.push(setting);
+    }
+    Some((args, key))
+}
+
+pub const GATEWAY_KEY_ENV: &str = "FRIDAY_GATEWAY_KEY";
+
 fn read_status(app: &AppHandle) -> GatewayStatus {
     let has_key = stored_key().is_some();
     let saved: GatewayStatus = status_path(app)

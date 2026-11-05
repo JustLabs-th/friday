@@ -252,6 +252,12 @@ class CodexClient {
     this.publish(p.threadId);
   };
 
+  /** Stops the engine and starts it again, so a changed gateway sign-in takes effect. */
+  restart = async (): Promise<EngineInfo> => {
+    await invoke('codex_disconnect');
+    return this.connect();
+  };
+
   connect = (): Promise<EngineInfo> => {
     if (this.snapshot.status === 'ready' && this.snapshot.info) return Promise.resolve(this.snapshot.info);
     if (this.connecting) return this.connecting;

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { gatewayLogin, gatewayLogout, gatewayStatus, type GatewayStatus } from '@/lib/gateway';
 
 /** The Account section of Settings: sign in to the company LLM gateway with SSO. */
-export function GatewayAccount() {
+export function GatewayAccount({ onChanged }: { onChanged?: () => void }) {
   const [status, setStatus] = useState<GatewayStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -18,6 +18,7 @@ export function GatewayAccount() {
     setError('');
     try {
       setStatus(await action());
+      onChanged?.();
     } catch (reason) {
       setError(String(reason));
     } finally {
