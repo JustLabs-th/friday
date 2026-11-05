@@ -43,6 +43,10 @@ dependency changes.
 - `src/components/app-sidebar.tsx`: projects, each with its own sessions.
 - `src/components/chat-view.tsx`, `prompt-input.tsx`, `model-selector.tsx`: chat area,
   composer (Enter sends, Shift+Enter adds a line) and model / effort pickers.
+- `src/components/markdown.tsx`: renders assistant replies (GitHub-flavoured Markdown, highlighted code
+  blocks with a copy button, tables). A fenced block tagged `chart` holding JSON becomes a chart; see
+  `markdown-chart.tsx` for the shape (`type` is bar, line, area or pie). Open `/#gallery` to see every
+  component and state.
 - `src/components/new-project-dialog.tsx`: project name, prompt and a native folder picker
   (Tauri dialog plugin; the picker button is disabled in a plain browser).
 - `src/components/settings-dialog.tsx`: settings popup; add a section by extending `sections`.

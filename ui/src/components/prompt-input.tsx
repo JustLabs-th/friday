@@ -41,7 +41,7 @@ export function PromptInput({ onSend, placeholder = 'พิมพ์ข้อค
   return (
     <form ref={formRef} onSubmit={handleSubmit}>
       <input ref={inputRef} type="file" multiple tabIndex={-1} className="sr-only" onChange={handleFiles} />
-      <InputGroup className="rounded-2xl">
+      <InputGroup className="glow-ring rounded-2xl border-border/60 bg-background/55 shadow-lg backdrop-blur-lg transition-colors has-[[data-slot=input-group-control]:focus-visible]:border-border/60 has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-disabled:bg-background/55 has-disabled:opacity-100 dark:bg-background/55 dark:has-disabled:bg-background/55">
         {files.length > 0 && (
           <InputGroupAddon align="block-start" className="flex-wrap gap-1.5">
             {files.map((file, index) => (

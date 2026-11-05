@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronRight, Command, Ellipsis, FolderOpen, Settings, SquarePen, Trash2 } from 'lucide-react';
+import { ChevronRight, Command, Ellipsis, FolderOpen, Pencil, Settings, SquarePen, Trash2 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarRail, useSidebar } from '@/components/ui/sidebar';
@@ -24,9 +24,11 @@ interface ProjectSessionsProps {
   onNewSession: (project: Project) => void;
   onDeleteProject: (project: Project) => void;
   onDeleteSession: (session: Session, project: Project) => void;
+  onRenameProject: (project: Project) => void;
+  onRenameSession: (session: Session, project: Project) => void;
 }
 
-function ProjectSessions({ project, sessions, active, activeSessionId, onSelectProject, onSelectSession, onNewSession, onDeleteProject, onDeleteSession }: ProjectSessionsProps) {
+function ProjectSessions({ project, sessions, active, activeSessionId, onSelectProject, onSelectSession, onNewSession, onDeleteProject, onDeleteSession, onRenameProject, onRenameSession }: ProjectSessionsProps) {
   const [open, setOpen] = useState(true);
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? sessions : sessions.slice(0, VISIBLE_SESSIONS);
@@ -45,6 +47,9 @@ function ProjectSessions({ project, sessions, active, activeSessionId, onSelectP
             <Ellipsis className="size-4" aria-hidden="true" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-44">
+            <DropdownMenuItem onClick={() => window.setTimeout(() => onRenameProject(project), 0)}>
+              <Pencil aria-hidden="true" />Rename project
+            </DropdownMenuItem>
             <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => window.setTimeout(() => onDeleteProject(project), 0)}>
               <Trash2 aria-hidden="true" />Delete project
             </DropdownMenuItem>
@@ -59,12 +64,17 @@ function ProjectSessions({ project, sessions, active, activeSessionId, onSelectP
           <SidebarMenu>
             {visible.map(session => (
               <SidebarMenuItem key={session.id}>
-                <SidebarMenuButton size="sm" isActive={session.id === activeSessionId} onClick={() => onSelectSession(session, project)} className="pl-7 pr-8">
+                <SidebarMenuButton size="sm" isActive={session.id === activeSessionId} onClick={() => onSelectSession(session, project)} className="pl-7 pr-14">
                   <span className="truncate">{session.title}</span>
                 </SidebarMenuButton>
-                <button type="button" aria-label={`Delete ${session.title}`} title="Delete session" onClick={() => onDeleteSession(session, project)} className="absolute top-1/2 right-1 -translate-y-1/2 rounded p-1 text-muted-foreground opacity-0 hover:bg-sidebar-accent hover:text-destructive focus-visible:opacity-100 group-hover/menu-item:opacity-100">
-                  <Trash2 className="size-3.5" aria-hidden="true" />
-                </button>
+                <div className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center opacity-0 group-hover/menu-item:opacity-100 focus-within:opacity-100">
+                  <button type="button" aria-label={`Rename ${session.title}`} title="Rename session" onClick={() => onRenameSession(session, project)} className="rounded p-1 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground">
+                    <Pencil className="size-3.5" aria-hidden="true" />
+                  </button>
+                  <button type="button" aria-label={`Delete ${session.title}`} title="Delete session" onClick={() => onDeleteSession(session, project)} className="rounded p-1 text-muted-foreground hover:bg-sidebar-accent hover:text-destructive">
+                    <Trash2 className="size-3.5" aria-hidden="true" />
+                  </button>
+                </div>
               </SidebarMenuItem>
             ))}
           </SidebarMenu>
@@ -93,6 +103,8 @@ interface AppSidebarProps {
   onNewProject: () => void;
   onDeleteProject: (project: Project) => void;
   onDeleteSession: (session: Session, project: Project) => void;
+  onRenameProject: (project: Project) => void;
+  onRenameSession: (session: Session, project: Project) => void;
 }
 
 export function AppSidebar({
@@ -108,6 +120,8 @@ export function AppSidebar({
   onNewProject,
   onDeleteProject,
   onDeleteSession,
+  onRenameProject,
+  onRenameSession,
 }: AppSidebarProps) {
   const { isMobile, setOpenMobile } = useSidebar();
   const [projectsOpen, setProjectsOpen] = useState(true);
@@ -166,6 +180,8 @@ export function AppSidebar({
                   onNewSession={onNewSession}
                   onDeleteProject={onDeleteProject}
                   onDeleteSession={onDeleteSession}
+                  onRenameProject={onRenameProject}
+                  onRenameSession={onRenameSession}
                 />
               ))}
               </div>
