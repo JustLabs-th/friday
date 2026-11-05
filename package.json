@@ -3,6 +3,11 @@
   "private": true,
   "description": "Tools for repo-wide maintenance.",
   "scripts": {
+    "ui:install": "pnpm --dir ui install --ignore-workspace --frozen-lockfile",
+    "ui:dev": "pnpm --dir ui dev",
+    "ui:build": "pnpm --dir ui build",
+    "ui:check": "pnpm --dir ui check",
+    "ui:desktop": "python ui/scripts/desktop.py",
     "format": "prettier --check *.json *.md docs/*.md .github/workflows/*.yml **/*.js",
     "format:fix": "prettier --write *.json *.md docs/*.md .github/workflows/*.yml **/*.js",
     "write-hooks-schema": "cargo run --manifest-path ./codex-rs/Cargo.toml -p codex-hooks --bin write_hooks_schema_fixtures"
