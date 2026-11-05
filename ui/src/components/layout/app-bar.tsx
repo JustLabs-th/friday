@@ -1,14 +1,42 @@
 import { useEffect, useState } from 'react';
+import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
-import { ChevronDown, Copy, CopyIcon, BookPlus, Ellipsis, FolderOpen, Pencil, Trash2, Globe, Menu, Minus, PanelRight, ScanSearch, SquareArrowOutUpRight, SquareTerminal, Square, X, ArrowLeft, ArrowRight, Check } from 'lucide-react';
-import type { Project } from '@/components/new-project-dialog';
+import {
+  ChevronDown,
+  Copy,
+  CopyIcon,
+  BookPlus,
+  Ellipsis,
+  FolderOpen,
+  Pencil,
+  Trash2,
+  Globe,
+  Menu,
+  Minus,
+  PanelRight,
+  ScanSearch,
+  SquareArrowOutUpRight,
+  SquareTerminal,
+  Square,
+  X,
+  ArrowLeft,
+  ArrowRight,
+  Check,
+} from 'lucide-react';
+import type { Project } from '@/components/dialogs/new-project-dialog';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { copyText } from '@/lib/clipboard';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-
-const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 interface AppBarProps {
   title: string;
@@ -37,17 +65,9 @@ interface AppBarProps {
   onSaveAsSkill: (() => void) | null;
 }
 
-async function copyText(text: string) {
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch {
-    // Clipboard access can be refused; nothing useful to do then.
-  }
-}
-
 // Asks the system file manager to show the folder. Only works in the desktop app.
 function revealFolder(path: string) {
-  if (isTauri) void revealItemInDir(path);
+  if (isTauri()) void revealItemInDir(path);
 }
 
 function IconButton({ label, children, ...props }: React.ComponentProps<typeof Button> & { label: string }) {
@@ -88,7 +108,7 @@ export function AppBar({
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
-    if (!isTauri) return;
+    if (!isTauri()) return;
     const win = getCurrentWindow();
     const refresh = () => void win.isMaximized().then(setMaximized);
     refresh();
@@ -96,7 +116,7 @@ export function AppBar({
     return () => void unlisten.then(stop => stop());
   }, []);
 
-  const win = isTauri ? getCurrentWindow() : null;
+  const win = isTauri() ? getCurrentWindow() : null;
 
   return (
     <header
@@ -111,7 +131,9 @@ export function AppBar({
           <DropdownMenuContent align="start" className="w-56">
             <DropdownMenuGroup>
               <DropdownMenuItem onClick={onNewProject}>New project</DropdownMenuItem>
-              <DropdownMenuItem disabled={!canCreateSession} onClick={onNewSession}>New session</DropdownMenuItem>
+              <DropdownMenuItem disabled={!canCreateSession} onClick={onNewSession}>
+                New session
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={onOpenSettings}>Settings</DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
@@ -133,7 +155,11 @@ export function AppBar({
 
       <div className="flex min-w-0 flex-1 justify-center" data-tauri-drag-region>
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="ghost" size="sm" className="max-w-full gap-1 font-medium" aria-label="Choose project" />}>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="ghost" size="sm" className="max-w-full gap-1 font-medium" aria-label="Choose project" />
+            }
+          >
             <span className="truncate">{title}</span>
             <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           </DropdownMenuTrigger>
@@ -154,24 +180,40 @@ export function AppBar({
       </div>
 
       <div className="flex items-center gap-0.5">
-        <IconButton label="Terminal" aria-pressed={terminalOpen} className={terminalOpen ? 'bg-muted text-foreground' : ''} onClick={onToggleTerminal}>
+        <IconButton
+          label="Terminal"
+          aria-pressed={terminalOpen}
+          className={terminalOpen ? 'bg-muted text-foreground' : ''}
+          onClick={onToggleTerminal}
+        >
           <SquareTerminal aria-hidden="true" />
         </IconButton>
-        <IconButton label="Right panel" aria-pressed={rightPanelOpen} className={rightPanelOpen ? 'bg-muted text-foreground' : ''} onClick={onToggleRightPanel}>
+        <IconButton
+          label="Right panel"
+          aria-pressed={rightPanelOpen}
+          className={rightPanelOpen ? 'bg-muted text-foreground' : ''}
+          onClick={onToggleRightPanel}
+        >
           <PanelRight aria-hidden="true" />
         </IconButton>
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Open in" title="Open in" disabled={!projectPath} />}>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="ghost" size="icon-sm" aria-label="Open in" title="Open in" disabled={!projectPath} />
+            }
+          >
             <SquareArrowOutUpRight aria-hidden="true" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuGroup>
               <DropdownMenuLabel>Open in</DropdownMenuLabel>
-              <DropdownMenuItem disabled={!isTauri} onClick={() => projectPath && revealFolder(projectPath)}>
-                <FolderOpen aria-hidden="true" />Reveal in File Explorer
+              <DropdownMenuItem disabled={!isTauri()} onClick={() => projectPath && revealFolder(projectPath)}>
+                <FolderOpen aria-hidden="true" />
+                Reveal in File Explorer
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => projectPath && void copyText(projectPath)}>
-                <CopyIcon aria-hidden="true" />Copy path
+                <CopyIcon aria-hidden="true" />
+                Copy path
               </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
@@ -181,24 +223,37 @@ export function AppBar({
         </IconButton>
         <IconButton
           label={projectPath ? 'Open folder' : 'Open folder (this project has no folder)'}
-          disabled={!projectPath || !isTauri}
+          disabled={!projectPath || !isTauri()}
           onClick={() => projectPath && revealFolder(projectPath)}
         >
           <FolderOpen aria-hidden="true" />
         </IconButton>
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="More" title="More" disabled={!onDeleteProject} />}>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="ghost" size="icon-sm" aria-label="More" title="More" disabled={!onDeleteProject} />
+            }
+          >
             <Ellipsis aria-hidden="true" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuItem disabled={!onSaveAsSkill} onClick={() => onSaveAsSkill && window.setTimeout(onSaveAsSkill, 0)}>
-              <BookPlus aria-hidden="true" />Save session as skill
+            <DropdownMenuItem
+              disabled={!onSaveAsSkill}
+              onClick={() => onSaveAsSkill && window.setTimeout(onSaveAsSkill, 0)}
+            >
+              <BookPlus aria-hidden="true" />
+              Save session as skill
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onRenameProject && window.setTimeout(onRenameProject, 0)}>
-              <Pencil aria-hidden="true" />Rename project
+              <Pencil aria-hidden="true" />
+              Rename project
             </DropdownMenuItem>
-            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDeleteProject && window.setTimeout(onDeleteProject, 0)}>
-              <Trash2 aria-hidden="true" />Delete project
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onClick={() => onDeleteProject && window.setTimeout(onDeleteProject, 0)}
+            >
+              <Trash2 aria-hidden="true" />
+              Delete project
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

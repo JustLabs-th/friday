@@ -35,8 +35,12 @@ export function Confirmation({ request, onApprove, onDeny }: ConfirmationProps) 
           {request.cwd && <p className="mt-1 break-all text-xs text-muted-foreground">{request.cwd}</p>}
         </ItemContent>
         <ItemActions>
-          <Button onClick={onDeny} size="sm" variant="outline">Deny</Button>
-          <Button onClick={onApprove} size="sm">Approve</Button>
+          <Button onClick={onDeny} size="sm" variant="outline">
+            Deny
+          </Button>
+          <Button onClick={onApprove} size="sm">
+            Approve
+          </Button>
         </ItemActions>
       </Item>
     );
@@ -47,7 +51,10 @@ export function Confirmation({ request, onApprove, onDeny }: ConfirmationProps) 
     <Trace>
       <TraceLine>
         <TraceIcon>{approved ? <CircleCheckIcon aria-hidden="true" /> : <BanIcon aria-hidden="true" />}</TraceIcon>
-        <TraceTitle>{approved ? 'Approved' : request.state === 'resolved' ? 'Resolved' : 'Denied'} <code className="font-mono">{request.command}</code></TraceTitle>
+        <TraceTitle>
+          {approved ? 'Approved' : request.state === 'resolved' ? 'Resolved' : 'Denied'}{' '}
+          <code className="font-mono">{request.command}</code>
+        </TraceTitle>
       </TraceLine>
     </Trace>
   );

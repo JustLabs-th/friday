@@ -23,7 +23,10 @@ function StateBadge({ state }: { state: SandboxRunState }) {
   if (state === 'running') {
     return (
       <Badge variant="secondary" className="bg-blue-500/10 text-blue-600 dark:text-blue-400">
-        <span className="size-1.5 animate-pulse rounded-full bg-current motion-reduce:animate-none" aria-hidden="true" />
+        <span
+          className="size-1.5 animate-pulse rounded-full bg-current motion-reduce:animate-none"
+          aria-hidden="true"
+        />
         Running
       </Badge>
     );
@@ -50,11 +53,17 @@ export function SandboxRun({ run }: { run: SandboxRunData }) {
   const firstTab = hasCode ? 'code' : 'console';
 
   return (
-    <Collapsible defaultOpen={!run.collapsed} className="overflow-hidden rounded-lg border bg-card text-card-foreground">
+    <Collapsible
+      defaultOpen={!run.collapsed}
+      className="overflow-hidden rounded-lg border bg-card text-card-foreground"
+    >
       <CollapsibleTrigger className="group/run flex w-full items-center gap-2 px-3 py-2 text-left text-sm outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50">
         <span className="min-w-0 flex-1 truncate font-medium">{run.title}</span>
         <StateBadge state={run.state} />
-        <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[panel-open]/run:rotate-90" aria-hidden="true" />
+        <ChevronRightIcon
+          className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[panel-open]/run:rotate-90"
+          aria-hidden="true"
+        />
       </CollapsibleTrigger>
       {(hasCode || hasOutput) && (
         <CollapsibleContent>
@@ -72,7 +81,9 @@ export function SandboxRun({ run }: { run: SandboxRunData }) {
             )}
             {hasOutput && (
               <TabsContent value="console">
-                <CodeBlock className={`rounded-none border-0 border-t bg-transparent ${run.state === 'error' ? 'text-destructive' : ''}`}>
+                <CodeBlock
+                  className={`rounded-none border-0 border-t bg-transparent ${run.state === 'error' ? 'text-destructive' : ''}`}
+                >
                   {run.output || (run.state === 'running' ? 'Waiting for output...' : '')}
                 </CodeBlock>
               </TabsContent>

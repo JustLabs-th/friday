@@ -54,25 +54,43 @@ dependency changes.
 
 ## Layout
 
-- `src/app.tsx`: project metadata, selected session/model, and page layout.
+Code style: `ui/.prettierrc.json` sets Prettier for the UI (single quotes, 120 columns). Format files with
+`pnpm dlx prettier@3 --write <files>`; leave `components/ui/` as the shadcn CLI generates it.
+
+- `src/app.tsx`: composes the page. It holds the open session, the dialogs and what each one acts on,
+  and the handlers that start, rename, delete and send. State that stands on its own lives in
+  `src/hooks/`: `use-page-history` (back / forward), `use-projects` (the project list, kept in local
+  storage), `use-model-choice` (model and effort), `use-panels` (terminal and right panel) and
+  `use-search-shortcut` (Ctrl+K).
 - `src/lib/codex.ts`: connection state, transcript projection, live events, history,
   attachments, and approval responses. `useSyncExternalStore` shares one connection
   across React mounts and Strict Mode.
-- `src/components/app-bar.tsx`: custom title bar. The Tauri window is frameless, so it
-  provides dragging and the minimize / maximize / close buttons.
-- `src/components/app-sidebar.tsx`: projects, each with its own sessions.
-- `src/components/chat-view.tsx`, `prompt-input.tsx`, `model-selector.tsx`: chat area,
-  composer (Enter sends, Shift+Enter adds a line) and model / effort pickers.
-- `src/components/markdown.tsx`: renders assistant replies (GitHub-flavoured Markdown, highlighted code
-  blocks with a copy button, tables). A fenced block tagged `chart` holding JSON becomes a chart; see
-  `markdown-chart.tsx` for the shape (`type` is bar, line, area or pie). Open `/#gallery` to see every
-  component and state.
-- `src/components/new-project-dialog.tsx`: project name, prompt and a native folder picker
-  (Tauri dialog plugin; the picker button is disabled in a plain browser).
-- `src/components/settings-dialog.tsx`: settings popup; add a section by extending `sections`.
+- `src/components/` is grouped by role. Imports use the `@/components/<folder>/<file>` alias.
+  - `layout/`: `app-bar.tsx` is the custom title bar (the Tauri window is frameless, so it
+    provides dragging and the minimize / maximize / close buttons); `app-sidebar.tsx` lists
+    projects, each with its own sessions.
+  - `chat/`: `chat-view.tsx`, `prompt-input.tsx` and `model-selector.tsx` are the chat area, the
+    composer (Enter sends, Shift+Enter adds a line) and the model / effort pickers. The parts of an
+    assistant reply live here too: `markdown.tsx`, `reasoning.tsx`, `plan.tsx`, `chain-of-thought.tsx`,
+    `confirmation.tsx`, `sandbox-run.tsx`, `sources.tsx` and `stack-trace.tsx`. `markdown.tsx` renders
+    GitHub-flavoured Markdown with highlighted code (copy button) and tables. A fenced block tagged
+    `chart` holding JSON becomes a chart; see `chart-spec.ts` for the shape (`type` is bar, line,
+    area or pie). The chart itself (`markdown-chart.tsx`, which pulls in recharts) is loaded the first
+    time a reply has one.
+  - `panels/`: the right panel (`right-panel.tsx` with `session-overview.tsx` and
+    `preview-panel.tsx`) and the terminal panel.
+  - `dialogs/`: new project (name, prompt and a native folder picker that is disabled in a plain
+    browser), rename, search (Ctrl+K), settings (extend `sections` to add one) and save-as-skill.
+  - `scheduling/`: the Scheduled tasks page (`scheduled-tasks.tsx`) and its parts: task card, run card,
+    the task editor and the delete confirmation.
+  - `gallery.tsx` shows every component and state at `/#gallery`. It is loaded only in dev, so a
+    production build does not include it.
+  - `ui/`: shadcn primitives (add more with `pnpm dlx shadcn@4.23.0 add <name>`).
+- `src/lib/`: `codex.ts` (above), `scheduler.ts`, `skills.ts`, and small shared helpers:
+  `clipboard.ts` (copy text) and `external.ts` (open links in the system browser from the desktop app).
+  Use `isTauri()` from `@tauri-apps/api/core` to tell the desktop app from a plain browser.
 - `src/lib/models.ts`: model types and the gallery's fallback snapshot. The live
   chat picker uses `model/list` from the connected engine.
-- `src/components/ui/`: shadcn primitives (add more with `pnpm dlx shadcn@4.23.0 add <name>`).
 - `src-tauri/src/codex.rs`: native process lifecycle, initialize handshake,
   request/response routing, supported-method allowlist, and pending approvals.
 - `src-tauri/`: Tauri shell. Window permissions are in `capabilities/default.json`.

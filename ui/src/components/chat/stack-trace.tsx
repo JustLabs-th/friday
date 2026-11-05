@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { copyText } from '@/lib/clipboard';
 import { CheckIcon, CircleXIcon, CopyIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,16 +25,16 @@ function isLibraryFrame(frame: string) {
 }
 
 export function StackTrace({ stack, defaultOpen = false }: StackTraceProps) {
-  const [error = '', ...frames] = stack.split('\n').map(line => line.trim()).filter(Boolean);
+  const [error = '', ...frames] = stack
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean);
   const [copied, setCopied] = useState(false);
 
   async function copy() {
-    try {
-      await navigator.clipboard.writeText(stack);
+    if (await copyText(stack)) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // Clipboard access can be refused; nothing useful to do then.
     }
   }
 
@@ -44,11 +45,20 @@ export function StackTrace({ stack, defaultOpen = false }: StackTraceProps) {
         <div className="flex items-center gap-1">
           <TraceCollapsibleTrigger className="flex-1">
             <TraceLine status="error">
-              <TraceIcon><CircleXIcon aria-hidden="true" /></TraceIcon>
+              <TraceIcon>
+                <CircleXIcon aria-hidden="true" />
+              </TraceIcon>
               <TraceTitle>Failed: {error}</TraceTitle>
             </TraceLine>
           </TraceCollapsibleTrigger>
-          <Button type="button" variant="ghost" size="icon-xs" aria-label={copied ? 'Copied' : 'Copy stack trace'} title="Copy stack trace" onClick={() => void copy()}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label={copied ? 'Copied' : 'Copy stack trace'}
+            title="Copy stack trace"
+            onClick={() => void copy()}
+          >
             {copied ? <CheckIcon aria-hidden="true" /> : <CopyIcon aria-hidden="true" />}
           </Button>
         </div>
@@ -57,7 +67,10 @@ export function StackTrace({ stack, defaultOpen = false }: StackTraceProps) {
             <p className="text-destructive">{error}</p>
             <ol>
               {frames.map((frame, index) => (
-                <li key={`${index}-${frame}`} className={isLibraryFrame(frame) ? 'text-muted-foreground' : 'text-foreground'}>
+                <li
+                  key={`${index}-${frame}`}
+                  className={isLibraryFrame(frame) ? 'text-muted-foreground' : 'text-foreground'}
+                >
                   {frame}
                 </li>
               ))}

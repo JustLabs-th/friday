@@ -1,6 +1,15 @@
 import { Fragment } from 'react';
 import { ChevronDown } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { InputGroupButton } from '@/components/ui/input-group';
 import { effortLabels, models as defaultModels, type Effort, type ModelInfo } from '@/lib/models';
 
@@ -13,14 +22,31 @@ interface ModelSelectorProps {
   disabled?: boolean;
 }
 
-export function ModelSelector({ modelId, effort, onModelChange, onEffortChange, models = defaultModels, disabled = false }: ModelSelectorProps) {
+export function ModelSelector({
+  modelId,
+  effort,
+  onModelChange,
+  onEffortChange,
+  models = defaultModels,
+  disabled = false,
+}: ModelSelectorProps) {
   const families = Array.from(new Set(models.map(item => item.family)));
   const current = models.find(item => item.id === modelId) ?? models[0];
   if (!current) return <span className="text-xs text-muted-foreground">Codex default</span>;
   return (
     <div className="flex items-center gap-1">
       <DropdownMenu>
-        <DropdownMenuTrigger render={<InputGroupButton type="button" variant="ghost" size="xs" disabled={disabled} aria-label={`Model: ${current.name}`} />}>
+        <DropdownMenuTrigger
+          render={
+            <InputGroupButton
+              type="button"
+              variant="ghost"
+              size="xs"
+              disabled={disabled}
+              aria-label={`Model: ${current.name}`}
+            />
+          }
+        >
           {current.name}
           <ChevronDown aria-hidden="true" />
         </DropdownMenuTrigger>
@@ -37,9 +63,13 @@ export function ModelSelector({ modelId, effort, onModelChange, onEffortChange, 
                 {index > 0 && <DropdownMenuSeparator />}
                 <DropdownMenuGroup>
                   <DropdownMenuLabel>{family}</DropdownMenuLabel>
-                  {models.filter(item => item.family === family).map(item => (
-                    <DropdownMenuRadioItem key={item.id} value={item.id}>{item.name}</DropdownMenuRadioItem>
-                  ))}
+                  {models
+                    .filter(item => item.family === family)
+                    .map(item => (
+                      <DropdownMenuRadioItem key={item.id} value={item.id}>
+                        {item.name}
+                      </DropdownMenuRadioItem>
+                    ))}
                 </DropdownMenuGroup>
               </Fragment>
             ))}
@@ -48,7 +78,17 @@ export function ModelSelector({ modelId, effort, onModelChange, onEffortChange, 
       </DropdownMenu>
 
       <DropdownMenu>
-        <DropdownMenuTrigger render={<InputGroupButton type="button" variant="ghost" size="xs" disabled={disabled || !current.efforts.length} aria-label={`Effort: ${effortLabels[effort]}`} />}>
+        <DropdownMenuTrigger
+          render={
+            <InputGroupButton
+              type="button"
+              variant="ghost"
+              size="xs"
+              disabled={disabled || !current.efforts.length}
+              aria-label={`Effort: ${effortLabels[effort]}`}
+            />
+          }
+        >
           {effortLabels[effort]}
           <ChevronDown aria-hidden="true" />
         </DropdownMenuTrigger>
@@ -57,7 +97,9 @@ export function ModelSelector({ modelId, effort, onModelChange, onEffortChange, 
             <DropdownMenuGroup>
               <DropdownMenuLabel>Effort</DropdownMenuLabel>
               {current.efforts.map(level => (
-                <DropdownMenuRadioItem key={level} value={level}>{effortLabels[level]}</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem key={level} value={level}>
+                  {effortLabels[level]}
+                </DropdownMenuRadioItem>
               ))}
             </DropdownMenuGroup>
           </DropdownMenuRadioGroup>

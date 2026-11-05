@@ -1,8 +1,16 @@
 import { useState, type FormEvent } from 'react';
+import { isTauri } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -18,8 +26,6 @@ interface NewProjectDialogProps {
   onOpenChange: (open: boolean) => void;
   onCreate: (project: Project) => void;
 }
-
-const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 export function NewProjectDialog({ open: isOpen, onOpenChange, onCreate }: NewProjectDialogProps) {
   const [name, setName] = useState('');
@@ -67,7 +73,9 @@ export function NewProjectDialog({ open: isOpen, onOpenChange, onCreate }: NewPr
 
           <div className="flex flex-col gap-4 px-4">
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="project-name" className="text-xs font-medium">ชื่อโปรเจกต์</label>
+              <label htmlFor="project-name" className="text-xs font-medium">
+                ชื่อโปรเจกต์
+              </label>
               <Input
                 id="project-name"
                 autoFocus
@@ -79,7 +87,9 @@ export function NewProjectDialog({ open: isOpen, onOpenChange, onCreate }: NewPr
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="project-prompt" className="text-xs font-medium">Project prompt</label>
+              <label htmlFor="project-prompt" className="text-xs font-medium">
+                Project prompt
+              </label>
               <Textarea
                 id="project-prompt"
                 value={prompt}
@@ -92,13 +102,19 @@ export function NewProjectDialog({ open: isOpen, onOpenChange, onCreate }: NewPr
             <div className="flex flex-col gap-1.5">
               <span className="text-xs font-medium">โฟลเดอร์ในเครื่อง</span>
               <div className="flex items-center gap-2">
-                <Input aria-label="Project folder" className="min-w-0 flex-1" value={folder} onChange={event => setFolder(event.target.value)} placeholder="Absolute project path" />
+                <Input
+                  aria-label="Project folder"
+                  className="min-w-0 flex-1"
+                  value={folder}
+                  onChange={event => setFolder(event.target.value)}
+                  placeholder="Absolute project path"
+                />
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => void chooseFolder()}
-                  disabled={!isTauri}
-                  title={isTauri ? undefined : 'เลือกโฟลเดอร์ได้เฉพาะในแอปเดสก์ท็อป'}
+                  disabled={!isTauri()}
+                  title={isTauri() ? undefined : 'เลือกโฟลเดอร์ได้เฉพาะในแอปเดสก์ท็อป'}
                 >
                   <FolderOpen aria-hidden="true" />
                   เลือกโฟลเดอร์

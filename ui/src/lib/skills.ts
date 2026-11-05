@@ -1,5 +1,5 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
-import type { Message } from '@/components/chat-view';
+import type { Message } from '@/components/chat/chat-view';
 
 export interface SkillDraft {
   name: string;
@@ -49,12 +49,14 @@ export function buildSkillDraft(title: string, messages: Message[]): SkillDraft 
     .map(message => clip(message.text, 240))
     .filter(Boolean)
     .slice(0, 8);
-  const commands = Array.from(new Set(
-    messages
-      .flatMap(message => message.runs ?? [])
-      .filter(run => run.state === 'completed' && run.code)
-      .map(run => clip(run.code ?? '', 200)),
-  )).slice(0, 10);
+  const commands = Array.from(
+    new Set(
+      messages
+        .flatMap(message => message.runs ?? [])
+        .filter(run => run.state === 'completed' && run.code)
+        .map(run => clip(run.code ?? '', 200)),
+    ),
+  ).slice(0, 10);
 
   const body = [
     `# ${clip(title, 80) || 'Workflow'}`,
@@ -82,6 +84,12 @@ export function composeSkill(draft: SkillDraft) {
   return `---\nname: ${draft.name}\ndescription: ${JSON.stringify(draft.description.replace(/\s+/g, ' ').trim())}\n---\n\n${draft.body.trim()}\n`;
 }
 
-export function saveSkill(input: { scope: SkillScope; projectPath: string | null; name: string; content: string; overwrite: boolean }) {
+export function saveSkill(input: {
+  scope: SkillScope;
+  projectPath: string | null;
+  name: string;
+  content: string;
+  overwrite: boolean;
+}) {
   return invoke<SavedSkill>('skill_save', { input });
 }

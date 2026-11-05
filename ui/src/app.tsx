@@ -1,134 +1,81 @@
 import { useEffect, useRef, useState } from 'react';
 import { isTauri } from '@tauri-apps/api/core';
 import { codex, samePath, useCodex } from '@/lib/codex';
-import { AppSidebar, type Page, type Session } from '@/components/app-sidebar';
-import { NewProjectDialog, type Project } from '@/components/new-project-dialog';
-import { AppBar } from '@/components/app-bar';
-import { ChatView } from '@/components/chat-view';
-import { ScheduledTasks } from '@/components/scheduled-tasks';
-import { SaveSkillDialog } from '@/components/save-skill-dialog';
+import { AppSidebar, type Session } from '@/components/layout/app-sidebar';
+import { NewProjectDialog, type Project } from '@/components/dialogs/new-project-dialog';
+import { AppBar } from '@/components/layout/app-bar';
+import { NoProject } from '@/components/layout/no-project';
+import { ChatView } from '@/components/chat/chat-view';
+import { ScheduledTasks } from '@/components/scheduling/scheduled-tasks';
+import { SaveSkillDialog } from '@/components/dialogs/save-skill-dialog';
+import { ConfirmDeleteDialog, type ItemTarget } from '@/components/dialogs/confirm-delete-dialog';
 import type { JobInput, ScheduledRun } from '@/lib/scheduler';
 import { buildSkillDraft, type SavedSkill, type SkillDraft } from '@/lib/skills';
-import { ModelSelector } from '@/components/model-selector';
-import { RenameDialog } from '@/components/rename-dialog';
-import { SearchDialog } from '@/components/search-dialog';
-import { SettingsDialog } from '@/components/settings-dialog';
-import { RightPanel, TerminalPanel, type RightPanelTab } from '@/components/workbench-panels';
-import { type Effort } from '@/lib/models';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
+import { ModelSelector } from '@/components/chat/model-selector';
+import { RenameDialog } from '@/components/dialogs/rename-dialog';
+import { SearchDialog } from '@/components/dialogs/search-dialog';
+import { SettingsDialog } from '@/components/dialogs/settings-dialog';
+import { RightPanel } from '@/components/panels/right-panel';
+import { TerminalPanel } from '@/components/panels/terminal-panel';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { useModelChoice } from '@/hooks/use-model-choice';
+import { usePageHistory } from '@/hooks/use-page-history';
+import { usePanels } from '@/hooks/use-panels';
+import { useProjects } from '@/hooks/use-projects';
+import { useSearchShortcut } from '@/hooks/use-search-shortcut';
 
-interface History {
-  stack: Page[];
-  index: number;
+function connectionLabel(status: string) {
+  if (status === 'ready') return 'Codex connected · workspace access · approvals on request';
+  if (status === 'connecting') return 'กำลังเชื่อมต่อ Codex…';
+  if (status === 'browser') return 'เปิด Friday Desktop เพื่อเชื่อมต่อ Codex';
+  return 'Codex disconnected';
 }
 
-const PROJECTS_KEY = 'friday.projects.v1';
-function readProjects(): Project[] {
-  try {
-    const data: unknown = JSON.parse(localStorage.getItem(PROJECTS_KEY) || '[]');
-    return Array.isArray(data) ? data.filter((item): item is Project =>
-      !!item && typeof item === 'object' && typeof item.id === 'string' &&
-      typeof item.name === 'string' && typeof item.path === 'string' && typeof item.prompt === 'string') : [];
-  } catch { return []; }
-}
+const folderName = (path: string) => path.split(/[\\/]/).filter(Boolean).pop();
 
 export function App() {
-  const [history, setHistory] = useState<History>({ stack: ['home'], index: 0 });
-  const [dark, setDark] = useState(false);
   const engine = useCodex();
-  const [projects, setProjects] = useState<Project[]>(readProjects);
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(() => readProjects()[0]?.id || null);
-  const configuredAtMount = useRef(false);
-  const startupComplete = useRef(false);
-  const startingSession = useRef(false);
-  useEffect(() => {
-    try { configuredAtMount.current = localStorage.getItem(PROJECTS_KEY) !== null; } catch { /* unavailable storage */ }
-    if (isTauri()) void codex.connect().catch(() => {});
-  }, []);
-  useEffect(() => {
-    if (engine.status !== 'ready' || !engine.info || startupComplete.current) return;
-    startupComplete.current = true;
-    if (!projects.length && !configuredAtMount.current) {
-      const path = engine.info.cwd;
-      const project = { id: crypto.randomUUID(), name: path.split(/[\\/]/).filter(Boolean).pop() || 'Friday', path, prompt: '' };
-      setProjects([project]); setActiveProjectId(project.id);
-    }
-  }, [engine.status, engine.info, projects.length]);
-  useEffect(() => {
-    if (!projects.length && !startupComplete.current) return;
-    try { localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects)); } catch { /* keep in memory */ }
-  }, [projects]);
-  const projectPaths = projects.map(project => project.path).filter(Boolean).sort().join('\0');
-  useEffect(() => {
-    if (engine.status === 'ready') void Promise.all(projectPaths.split('\0').filter(Boolean).map(path => codex.loadProject(path))).catch(codex.report);
-  }, [engine.status, projectPaths]);
-  const sessions: Record<string, Session[]> = Object.fromEntries(projects.map(project => [
-    project.id,
-    Object.values(engine.threads).filter(thread => samePath(thread.cwd, project.path))
-      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
-      .map(thread => ({ id: thread.id, title: thread.name || thread.preview || 'New session' })),
-  ]));
-  const messages = engine.messages;
+  const nav = usePageHistory();
+  const panels = usePanels();
+  const { projects, setProjects, activeProjectId, setActiveProjectId, activeProject } = useProjects(engine);
+  const model = useModelChoice(engine.models, engine.defaultModel);
+  const [dark, setDark] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const startingSession = useRef(false);
+
+  // Dialogs and the thing each one is about.
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [skillDraft, setSkillDraft] = useState<SkillDraft | null>(null);
   const [schedulePrefill, setSchedulePrefill] = useState<Partial<JobInput> | null>(null);
+  const [pendingRename, setPendingRename] = useState<ItemTarget | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<ItemTarget | null>(null);
 
-  // Ctrl+K (Cmd+K on macOS) opens the search from anywhere.
+  useSearchShortcut(setSearchOpen);
   useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault();
-        setSearchOpen(open => !open);
-      }
-    }
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    if (isTauri()) void codex.connect().catch(() => {});
   }, []);
-  const [terminalOpen, setTerminalOpen] = useState(false);
-  const [rightPanelOpen, setRightPanelOpen] = useState(false);
-  const [rightPanelTab, setRightPanelTab] = useState<RightPanelTab>('overview');
-  const [modelId, setModelId] = useState('');
-  const [effort, setEffort] = useState<Effort>('medium');
-  useEffect(() => {
-    if (!engine.models.length) return;
-    const selected = engine.models.find(model => model.id === modelId);
-    if (!selected) {
-      const fallback = engine.models.find(model => model.id === engine.defaultModel) || engine.models[0];
-      setModelId(fallback.id); setEffort(fallback.defaultEffort);
-    } else if (selected.efforts.length && !selected.efforts.includes(effort)) setEffort(selected.defaultEffort);
-  }, [engine.models, engine.defaultModel, modelId, effort]);
-  const [pendingRename, setPendingRename] = useState<
-    { kind: 'project'; project: Project } | { kind: 'session'; project: Project; session: Session } | null
-  >(null);
-  const [pendingDelete, setPendingDelete] = useState<
-    { kind: 'project'; project: Project } | { kind: 'session'; project: Project; session: Session } | null
-  >(null);
 
-  const activeProject = projects.find(item => item.id === activeProjectId) ?? null;
-  const activeRuns = (activeSessionId ? messages[activeSessionId] ?? [] : []).flatMap(message => message.runs ?? []);
-  const activeSession = activeProject && activeSessionId
-    ? (sessions[activeProject.id] ?? []).find(item => item.id === activeSessionId) ?? null
-    : null;
+  const messages = engine.messages;
+  const sessions: Record<string, Session[]> = Object.fromEntries(
+    projects.map(project => [
+      project.id,
+      Object.values(engine.threads)
+        .filter(thread => samePath(thread.cwd, project.path))
+        .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+        .map(thread => ({ id: thread.id, title: thread.name || thread.preview || 'New session' })),
+    ]),
+  );
+  const activeSession =
+    activeProject && activeSessionId
+      ? ((sessions[activeProject.id] ?? []).find(item => item.id === activeSessionId) ?? null)
+      : null;
+  const activeRuns = (activeSessionId ? (messages[activeSessionId] ?? []) : []).flatMap(message => message.runs ?? []);
+  const sessionRunning = !!(activeSessionId && engine.running[activeSessionId]);
+  const scheduledPage = nav.page === 'scheduled';
 
-  function navigate(next: Page) {
-    setHistory(current => {
-      if (current.stack[current.index] === next) return current;
-      const stack = [...current.stack.slice(0, current.index + 1), next];
-      return { stack, index: stack.length - 1 };
-    });
-  }
-  function goBack() {
-    setHistory(current => ({ ...current, index: Math.max(0, current.index - 1) }));
-  }
-  function goForward() {
-    setHistory(current => ({ ...current, index: Math.min(current.stack.length - 1, current.index + 1) }));
-  }
   function setTheme(next: boolean) {
     setDark(next);
     document.documentElement.classList.toggle('dark', next);
@@ -136,12 +83,12 @@ export function App() {
   function selectProject(project: Project) {
     setActiveProjectId(project.id);
     setActiveSessionId(null);
-    navigate('home');
+    nav.navigate('home');
   }
   function selectSession(item: Session, project: Project) {
     setActiveProjectId(project.id);
     setActiveSessionId(item.id);
-    navigate('home');
+    nav.navigate('home');
     void codex.resume(item.id).catch(codex.report);
   }
   async function startNewSession(project: Project) {
@@ -149,9 +96,20 @@ export function App() {
     startingSession.current = true;
     try {
       const thread = await codex.start(project.path, project.prompt);
-      setActiveProjectId(project.id); setActiveSessionId(thread.id); navigate('home');
-    } catch (error) { codex.report(error); }
-    finally { startingSession.current = false; }
+      setActiveProjectId(project.id);
+      setActiveSessionId(thread.id);
+      nav.navigate('home');
+    } catch (error) {
+      codex.report(error);
+    } finally {
+      startingSession.current = false;
+    }
+  }
+  function createProject(project: Project) {
+    setProjects(current => [project, ...current]);
+    setActiveProjectId(project.id);
+    setActiveSessionId(null);
+    nav.navigate('home');
   }
   async function confirmDelete() {
     if (!pendingDelete) return;
@@ -160,14 +118,30 @@ export function App() {
         const remaining = projects.filter(item => item.id !== pendingDelete.project.id);
         setProjects(remaining);
         if (activeProjectId === pendingDelete.project.id) {
-          setActiveProjectId(remaining[0]?.id || null); setActiveSessionId(null);
+          setActiveProjectId(remaining[0]?.id || null);
+          setActiveSessionId(null);
         }
       } else {
         await codex.archive(pendingDelete.session.id);
         if (activeSessionId === pendingDelete.session.id) setActiveSessionId(null);
       }
       setPendingDelete(null);
-    } catch (error) { codex.report(error); }
+    } catch (error) {
+      codex.report(error);
+    }
+  }
+  async function renamePending(name: string) {
+    if (!pendingRename) return;
+    try {
+      if (pendingRename.kind === 'project') {
+        const id = pendingRename.project.id;
+        setProjects(current => current.map(item => (item.id === id ? { ...item, name } : item)));
+      } else {
+        await codex.rename(pendingRename.session.id, name);
+      }
+    } catch (error) {
+      codex.report(error);
+    }
   }
   async function sendMessage(text: string, files: File[]) {
     if (!activeProject) return false;
@@ -175,36 +149,24 @@ export function App() {
       let id = activeSessionId;
       if (!id) {
         const thread = await codex.start(activeProject.path, activeProject.prompt);
-        id = thread.id; setActiveSessionId(id);
+        id = thread.id;
+        setActiveSessionId(id);
       }
-      await codex.send(id, text, files, modelId, effort);
+      await codex.send(id, text, files, model.modelId, model.effort);
       return true;
-    } catch (error) { codex.report(error); return false; }
+    } catch (error) {
+      codex.report(error);
+      return false;
+    }
   }
   function resolveConfirmation(_messageId: string, confirmationId: string, approved: boolean) {
     void codex.respond(confirmationId, approved).catch(codex.report);
   }
-  async function renamePending(name: string) {
-    if (!pendingRename) return;
-    try {
-      if (pendingRename.kind === 'project') {
-        const id = pendingRename.project.id;
-        setProjects(current => current.map(item => item.id === id ? { ...item, name } : item));
-      } else await codex.rename(pendingRename.session.id, name);
-    } catch (error) { codex.report(error); }
-  }
-  function createProject(project: Project) {
-    setProjects(current => [project, ...current]);
-    setActiveProjectId(project.id);
-    setActiveSessionId(null);
-    navigate('home');
-  }
-
   function openScheduledSession(run: ScheduledRun) {
     if (!run.threadId) return;
-    let project = projects.find(project => samePath(project.path, run.cwd));
+    let project = projects.find(item => samePath(item.path, run.cwd));
     if (!project) {
-      project = { id: crypto.randomUUID(), name: run.cwd.split(/[\\/]/).filter(Boolean).pop() || run.jobName, path: run.cwd, prompt: '' };
+      project = { id: crypto.randomUUID(), name: folderName(run.cwd) || run.jobName, path: run.cwd, prompt: '' };
       const added = project;
       setProjects(current => [...current, added]);
     }
@@ -218,42 +180,46 @@ export function App() {
       prompt: `Run the ${skill.name} skill.`,
       skill: { name: skill.name, path: skill.path },
     });
-    navigate('scheduled');
+    nav.navigate('scheduled');
   }
-  const scheduledPage = history.stack[history.index] === 'scheduled';
+  const reconnect = () => {
+    void codex.connect().catch(codex.report);
+  };
 
   return (
     <TooltipProvider>
       <SidebarProvider className="h-svh min-h-0 flex-col overflow-hidden">
         <AppBar
-          title={scheduledPage ? 'Scheduled tasks' : activeProject?.name ?? 'Friday'}
+          title={scheduledPage ? 'Scheduled tasks' : (activeProject?.name ?? 'Friday')}
           projects={projects}
           activeProjectId={activeProjectId}
           onSelectProject={selectProject}
           onNewProject={() => setNewProjectOpen(true)}
           canCreateSession={activeProject !== null && engine.status === 'ready'}
-          canGoBack={history.index > 0}
-          canGoForward={history.index < history.stack.length - 1}
-          onBack={goBack}
-          onForward={goForward}
+          canGoBack={nav.canGoBack}
+          canGoForward={nav.canGoForward}
+          onBack={nav.goBack}
+          onForward={nav.goForward}
           onNewSession={() => activeProject && startNewSession(activeProject)}
           onOpenSettings={() => setSettingsOpen(true)}
           onOpenSearch={() => setSearchOpen(true)}
-          terminalOpen={terminalOpen}
-          onToggleTerminal={() => setTerminalOpen(open => !open)}
-          rightPanelOpen={rightPanelOpen}
-          onToggleRightPanel={() => setRightPanelOpen(open => !open)}
-          onOpenPreview={() => { setRightPanelTab('preview'); setRightPanelOpen(true); }}
+          terminalOpen={panels.terminalOpen}
+          onToggleTerminal={panels.toggleTerminal}
+          rightPanelOpen={panels.rightPanelOpen}
+          onToggleRightPanel={panels.toggleRightPanel}
+          onOpenPreview={panels.openPreview}
           projectPath={activeProject?.path || null}
           onDeleteProject={activeProject ? () => setPendingDelete({ kind: 'project', project: activeProject }) : null}
           onRenameProject={activeProject ? () => setPendingRename({ kind: 'project', project: activeProject }) : null}
-          onSaveAsSkill={activeSession && (messages[activeSession.id]?.length ?? 0) > 0
-            ? () => setSkillDraft(buildSkillDraft(activeSession.title, messages[activeSession.id] ?? []))
-            : null}
+          onSaveAsSkill={
+            activeSession && (messages[activeSession.id]?.length ?? 0) > 0
+              ? () => setSkillDraft(buildSkillDraft(activeSession.title, messages[activeSession.id] ?? []))
+              : null
+          }
         />
         <div className="flex min-h-0 flex-1">
           <AppSidebar
-            onNavigate={navigate}
+            onNavigate={nav.navigate}
             onOpenSettings={() => setSettingsOpen(true)}
             projects={projects}
             sessions={sessions}
@@ -269,56 +235,77 @@ export function App() {
             onRenameSession={(session, project) => setPendingRename({ kind: 'session', session, project })}
           />
           <SidebarInset className="min-h-0 min-w-0">
-            {!activeProject && engine.error && <div role="alert" className="border-b px-5 py-3 text-sm text-destructive">{engine.error}<button className="ml-3 underline" onClick={() => { void codex.connect().catch(codex.report); }}>เชื่อมต่อใหม่</button></div>}
+            {!activeProject && engine.error && (
+              <div role="alert" className="border-b px-5 py-3 text-sm text-destructive">
+                {engine.error}
+                <button className="ml-3 underline" onClick={reconnect}>
+                  เชื่อมต่อใหม่
+                </button>
+              </div>
+            )}
             <div className="flex min-h-0 min-w-0 flex-1">
-            <main className="flex min-h-0 min-w-0 flex-1 flex-col" aria-labelledby="page-title">
-              {scheduledPage ? <ScheduledTasks projects={projects} models={engine.models} onOpenSession={openScheduledSession} prefill={schedulePrefill} onPrefillUsed={() => setSchedulePrefill(null)} /> : activeProject ? (
-                <ChatView
-                  title={activeSession?.title ?? activeProject.name}
-                  subtitle={activeSession ? undefined : activeProject.path || undefined}
-                  detail={activeSession ? `session ใน project ${activeProject.name}` : activeProject.prompt || undefined}
-                  messages={activeSession ? messages[activeSession.id] ?? [] : []}
-                  onSend={sendMessage}
-                  onResolveConfirmation={resolveConfirmation}
-                  running={!!(activeSessionId && engine.running[activeSessionId])}
-                  loading={!!(activeSessionId && engine.loading[activeSessionId])}
-                  onStop={() => { if (activeSessionId) void codex.stop(activeSessionId).catch(codex.report); }}
-                  connection={{
-                    status: engine.status, error: engine.error,
-                    label: engine.status === 'ready' ? 'Codex connected · workspace access · approvals on request' : engine.status === 'connecting' ? 'กำลังเชื่อมต่อ Codex…' : engine.status === 'browser' ? 'เปิด Friday Desktop เพื่อเชื่อมต่อ Codex' : 'Codex disconnected',
-                    onReconnect: () => { void codex.connect().catch(codex.report); },
-                    onDismiss: codex.clearError,
-                  }}
-                  controls={
-                    <ModelSelector
-                      models={engine.models}
-                      disabled={engine.status !== 'ready' || !!(activeSessionId && engine.running[activeSessionId])}
-                      modelId={modelId}
-                      effort={effort}
-                      onModelChange={next => {
-                        setModelId(next.id);
-                        if (!next.efforts.includes(effort)) setEffort(next.defaultEffort);
-                      }}
-                      onEffortChange={setEffort}
-                    />
-                  }
+              <main className="flex min-h-0 min-w-0 flex-1 flex-col" aria-labelledby="page-title">
+                {scheduledPage ? (
+                  <ScheduledTasks
+                    projects={projects}
+                    models={engine.models}
+                    onOpenSession={openScheduledSession}
+                    prefill={schedulePrefill}
+                    onPrefillUsed={() => setSchedulePrefill(null)}
+                  />
+                ) : activeProject ? (
+                  <ChatView
+                    title={activeSession?.title ?? activeProject.name}
+                    subtitle={activeSession ? undefined : activeProject.path || undefined}
+                    detail={
+                      activeSession ? `session ใน project ${activeProject.name}` : activeProject.prompt || undefined
+                    }
+                    messages={activeSession ? (messages[activeSession.id] ?? []) : []}
+                    onSend={sendMessage}
+                    onResolveConfirmation={resolveConfirmation}
+                    running={sessionRunning}
+                    loading={!!(activeSessionId && engine.loading[activeSessionId])}
+                    onStop={() => {
+                      if (activeSessionId) void codex.stop(activeSessionId).catch(codex.report);
+                    }}
+                    connection={{
+                      status: engine.status,
+                      error: engine.error,
+                      label: connectionLabel(engine.status),
+                      onReconnect: reconnect,
+                      onDismiss: codex.clearError,
+                    }}
+                    controls={
+                      <ModelSelector
+                        models={engine.models}
+                        disabled={engine.status !== 'ready' || sessionRunning}
+                        modelId={model.modelId}
+                        effort={model.effort}
+                        onModelChange={model.chooseModel}
+                        onEffortChange={model.setEffort}
+                      />
+                    }
+                  />
+                ) : (
+                  <NoProject onCreate={() => setNewProjectOpen(true)} />
+                )}
+              </main>
+              {!scheduledPage && panels.rightPanelOpen && (
+                <RightPanel
+                  tab={panels.rightPanelTab}
+                  onTabChange={panels.setRightPanelTab}
+                  onClose={panels.closeRightPanel}
+                  project={activeProject}
+                  runs={activeRuns}
                 />
-              ) : (
-                <div className="flex flex-1 items-center justify-center p-8">
-                  <div className="w-full max-w-sm text-center">
-                    <p className="mb-4 text-[10px] tracking-[.25em] text-muted-foreground">FRIDAY</p>
-                    <h1 id="page-title" className="text-2xl font-medium tracking-tight">ยังไม่มี project</h1>
-                    <p className="mt-3 text-sm leading-relaxed text-muted-foreground">สร้าง project เพื่อเลือกโฟลเดอร์และเริ่ม session</p>
-                    <Button className="mt-5" onClick={() => setNewProjectOpen(true)}>สร้าง project</Button>
-                  </div>
-                </div>
               )}
-            </main>
-            {!scheduledPage && rightPanelOpen && <RightPanel tab={rightPanelTab} onTabChange={setRightPanelTab} onClose={() => setRightPanelOpen(false)} project={activeProject} runs={activeRuns} />}
             </div>
-            {!scheduledPage && terminalOpen && <TerminalPanel runs={activeRuns} onClose={() => setTerminalOpen(false)} />}
+            {!scheduledPage && panels.terminalOpen && (
+              <TerminalPanel runs={activeRuns} onClose={panels.closeTerminal} />
+            )}
           </SidebarInset>
         </div>
+
         {pendingRename && (
           <RenameDialog
             kind={pendingRename.kind}
@@ -336,29 +323,25 @@ export function App() {
             onSchedule={scheduleSkill}
           />
         )}
-        <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} projects={projects} sessions={sessions} onSelectProject={selectProject} onSelectSession={selectSession} />
-        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} dark={dark} onSetDark={setTheme} engineLabel={engine.status === 'ready' ? 'Connected' : engine.status} enginePath={engine.info?.binary} onReconnect={() => { void codex.connect().catch(codex.report); }} />
+        <SearchDialog
+          open={searchOpen}
+          onOpenChange={setSearchOpen}
+          projects={projects}
+          sessions={sessions}
+          onSelectProject={selectProject}
+          onSelectSession={selectSession}
+        />
+        <SettingsDialog
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          dark={dark}
+          onSetDark={setTheme}
+          engineLabel={engine.status === 'ready' ? 'Connected' : engine.status}
+          enginePath={engine.info?.binary}
+          onReconnect={reconnect}
+        />
         <NewProjectDialog open={newProjectOpen} onOpenChange={setNewProjectOpen} onCreate={createProject} />
-        <AlertDialog open={pendingDelete !== null} onOpenChange={open => { if (!open) setPendingDelete(null); }}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                {pendingDelete?.kind === 'project' ? 'ลบ project?' : 'ลบ session?'}
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                {pendingDelete?.kind === 'project'
-                  ? `ลบ "${pendingDelete.project.name}" ออกจาก Friday โดยไม่ลบไฟล์หรือประวัติใน Codex`
-                  : pendingDelete?.kind === 'session'
-                    ? `ลบ session "${pendingDelete.session.title}" ออกจากรายการ โดยเก็บประวัติไว้ใน Codex`
-                    : ''}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
-              <AlertDialogAction variant="destructive" onClick={confirmDelete}>ลบ</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <ConfirmDeleteDialog target={pendingDelete} onCancel={() => setPendingDelete(null)} onConfirm={confirmDelete} />
       </SidebarProvider>
     </TooltipProvider>
   );

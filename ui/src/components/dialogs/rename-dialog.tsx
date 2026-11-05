@@ -1,6 +1,13 @@
 import { useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 
 interface RenameDialogProps {
@@ -24,7 +31,12 @@ export function RenameDialog({ kind, initialName, onSubmit, onClose }: RenameDia
   }
 
   return (
-    <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={open => {
+        if (!open) onClose();
+      }}
+    >
       <DialogContent>
         <form onSubmit={submit} className="flex flex-col gap-4">
           <DialogHeader>
@@ -32,11 +44,21 @@ export function RenameDialog({ kind, initialName, onSubmit, onClose }: RenameDia
             <DialogDescription>ตั้งชื่อใหม่ให้ {kind} นี้</DialogDescription>
           </DialogHeader>
           <div className="px-4">
-            <Input autoFocus aria-label={`ชื่อ ${kind}`} value={name} onChange={event => setName(event.target.value)} onFocus={event => event.currentTarget.select()} />
+            <Input
+              autoFocus
+              aria-label={`ชื่อ ${kind}`}
+              value={name}
+              onChange={event => setName(event.target.value)}
+              onFocus={event => event.currentTarget.select()}
+            />
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>ยกเลิก</Button>
-            <Button type="submit" disabled={!trimmed}>บันทึก</Button>
+            <Button type="button" variant="outline" onClick={onClose}>
+              ยกเลิก
+            </Button>
+            <Button type="submit" disabled={!trimmed}>
+              บันทึก
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

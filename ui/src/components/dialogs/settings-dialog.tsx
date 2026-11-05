@@ -30,7 +30,9 @@ interface Section {
   id: string;
   label: string;
   icon: LucideIcon;
-  render: (props: Pick<SettingsDialogProps, 'dark' | 'onSetDark' | 'engineLabel' | 'enginePath' | 'onReconnect'>) => ReactNode;
+  render: (
+    props: Pick<SettingsDialogProps, 'dark' | 'onSetDark' | 'engineLabel' | 'enginePath' | 'onReconnect'>,
+  ) => ReactNode;
 }
 
 const sections: Section[] = [
@@ -42,10 +44,12 @@ const sections: Section[] = [
       <SettingRow label="Theme" description="เลือกโหมดสีของแอป">
         <div className="flex gap-1 rounded-lg bg-muted p-0.5">
           <Button variant={dark ? 'ghost' : 'outline'} size="sm" aria-pressed={!dark} onClick={() => onSetDark(false)}>
-            <Sun aria-hidden="true" />Light
+            <Sun aria-hidden="true" />
+            Light
           </Button>
           <Button variant={dark ? 'outline' : 'ghost'} size="sm" aria-pressed={dark} onClick={() => onSetDark(true)}>
-            <Moon aria-hidden="true" />Dark
+            <Moon aria-hidden="true" />
+            Dark
           </Button>
         </div>
       </SettingRow>
@@ -62,21 +66,39 @@ const sections: Section[] = [
         </SettingRow>
         <SettingRow label="Codex engine" description={enginePath || 'ใช้ login และ configuration ของ Codex ในเครื่อง'}>
           <span className="text-sm text-muted-foreground">{engineLabel || 'Not connected'}</span>
-          {onReconnect && <Button className="ml-2" variant="outline" size="sm" onClick={onReconnect}>Reconnect</Button>}
+          {onReconnect && (
+            <Button className="ml-2" variant="outline" size="sm" onClick={onReconnect}>
+              Reconnect
+            </Button>
+          )}
         </SettingRow>
       </>
     ),
   },
 ];
 
-export function SettingsDialog({ open, onOpenChange, dark, onSetDark, engineLabel, enginePath, onReconnect }: SettingsDialogProps) {
+export function SettingsDialog({
+  open,
+  onOpenChange,
+  dark,
+  onSetDark,
+  engineLabel,
+  enginePath,
+  onReconnect,
+}: SettingsDialogProps) {
   const [query, setQuery] = useState('');
   const [activeId, setActiveId] = useState(sections[0].id);
   const visible = sections.filter(item => item.label.toLowerCase().includes(query.trim().toLowerCase()));
   const active = sections.find(item => item.id === activeId) ?? sections[0];
 
   return (
-    <Dialog open={open} onOpenChange={next => { if (!next) setQuery(''); onOpenChange(next); }}>
+    <Dialog
+      open={open}
+      onOpenChange={next => {
+        if (!next) setQuery('');
+        onOpenChange(next);
+      }}
+    >
       <DialogContent className="h-[min(80vh,640px)] max-w-4xl gap-0 overflow-hidden">
         <div className="border-b px-5 py-4">
           <DialogTitle>Settings</DialogTitle>
@@ -85,8 +107,17 @@ export function SettingsDialog({ open, onOpenChange, dark, onSetDark, engineLabe
         <div className="flex min-h-0 flex-1">
           <nav aria-label="Settings sections" className="flex w-56 shrink-0 flex-col gap-1 border-r p-3">
             <div className="relative mb-2">
-              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-              <Input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search" aria-label="Search settings" className="pl-8" />
+              <Search
+                className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <Input
+                value={query}
+                onChange={event => setQuery(event.target.value)}
+                placeholder="Search"
+                aria-label="Search settings"
+                className="pl-8"
+              />
             </div>
             {visible.map(item => (
               <button

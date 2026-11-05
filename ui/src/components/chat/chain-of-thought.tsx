@@ -26,7 +26,13 @@ export interface ChainStep {
 function StatusIcon({ status }: { status: ChainStep['status'] }) {
   return (
     <TraceIcon>
-      {status === 'running' ? <LoaderCircleIcon aria-hidden="true" /> : status === 'error' ? <CircleXIcon aria-hidden="true" /> : <CircleCheckIcon aria-hidden="true" />}
+      {status === 'running' ? (
+        <LoaderCircleIcon aria-hidden="true" />
+      ) : status === 'error' ? (
+        <CircleXIcon aria-hidden="true" />
+      ) : (
+        <CircleCheckIcon aria-hidden="true" />
+      )}
     </TraceIcon>
   );
 }
@@ -45,7 +51,11 @@ function StepLine({ step }: { step: ChainStep }) {
       <TraceCollapsibleContent>
         {step.tags && step.tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
-            {step.tags.map(tag => <Badge key={tag} variant="secondary">{tag}</Badge>)}
+            {step.tags.map(tag => (
+              <Badge key={tag} variant="secondary">
+                {tag}
+              </Badge>
+            ))}
           </div>
         )}
         {step.output && <CodeBlock>{step.output}</CodeBlock>}
@@ -81,7 +91,9 @@ export function ChainOfThought({ steps }: ChainOfThoughtProps) {
         </TraceCollapsibleTrigger>
         <TraceCollapsibleContent>
           <Trace>
-            {steps.map(step => <StepLine key={step.id} step={step} />)}
+            {steps.map(step => (
+              <StepLine key={step.id} step={step} />
+            ))}
           </Trace>
         </TraceCollapsibleContent>
       </TraceCollapsible>

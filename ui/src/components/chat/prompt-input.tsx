@@ -12,7 +12,15 @@ interface PromptInputProps {
   onStop?: () => void;
 }
 
-export function PromptInput({ onSend, placeholder = 'พิมพ์ข้อความ...', disabled = false, controls, sending = false, running = false, onStop }: PromptInputProps) {
+export function PromptInput({
+  onSend,
+  placeholder = 'พิมพ์ข้อความ...',
+  disabled = false,
+  controls,
+  sending = false,
+  running = false,
+  onStop,
+}: PromptInputProps) {
   const [text, setText] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
@@ -29,10 +37,12 @@ export function PromptInput({ onSend, placeholder = 'พิมพ์ข้อค
     try {
       const accepted = await onSend(text.trim(), files);
       if (accepted !== false) {
-        setText(current => current === sentText ? '' : current);
-        setFiles(current => current === sentFiles ? [] : current);
+        setText(current => (current === sentText ? '' : current));
+        setFiles(current => (current === sentFiles ? [] : current));
       }
-    } finally { setSubmitting(false); }
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -56,7 +66,10 @@ export function PromptInput({ onSend, placeholder = 'พิมพ์ข้อค
         {files.length > 0 && (
           <InputGroupAddon align="block-start" className="flex-wrap gap-1.5">
             {files.map((file, index) => (
-              <span key={`${file.name}-${index}`} className="flex max-w-48 items-center gap-1.5 rounded-lg border bg-muted/50 py-1 pr-1 pl-2 text-xs text-foreground">
+              <span
+                key={`${file.name}-${index}`}
+                className="flex max-w-48 items-center gap-1.5 rounded-lg border bg-muted/50 py-1 pr-1 pl-2 text-xs text-foreground"
+              >
                 <FileIcon className="size-3.5 shrink-0" aria-hidden="true" />
                 <span className="truncate">{file.name}</span>
                 <button
@@ -92,16 +105,29 @@ export function PromptInput({ onSend, placeholder = 'พิมพ์ข้อค
             <PlusIcon aria-hidden="true" />
           </InputGroupButton>
           {controls}
-          {running ? <InputGroupButton type="button" aria-label="Stop" className="ms-auto rounded-full" size="icon-sm" variant="default" onClick={onStop}><SquareIcon className="size-3" fill="currentColor" aria-hidden="true" /></InputGroupButton> : <InputGroupButton
-            type="submit"
-            aria-label="Send"
-            className="ms-auto rounded-full"
-            disabled={!canSend}
-            size="icon-sm"
-            variant="default"
-          >
-            <ArrowUpIcon aria-hidden="true" />
-          </InputGroupButton>}
+          {running ? (
+            <InputGroupButton
+              type="button"
+              aria-label="Stop"
+              className="ms-auto rounded-full"
+              size="icon-sm"
+              variant="default"
+              onClick={onStop}
+            >
+              <SquareIcon className="size-3" fill="currentColor" aria-hidden="true" />
+            </InputGroupButton>
+          ) : (
+            <InputGroupButton
+              type="submit"
+              aria-label="Send"
+              className="ms-auto rounded-full"
+              disabled={!canSend}
+              size="icon-sm"
+              variant="default"
+            >
+              <ArrowUpIcon aria-hidden="true" />
+            </InputGroupButton>
+          )}
         </InputGroupAddon>
       </InputGroup>
     </form>

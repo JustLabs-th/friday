@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { FolderOpen, MessageSquare, Search } from 'lucide-react';
-import type { Project } from '@/components/new-project-dialog';
-import type { Session } from '@/components/app-sidebar';
+import type { Project } from '@/components/dialogs/new-project-dialog';
+import type { Session } from '@/components/layout/app-sidebar';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 
 interface SearchDialogProps {
@@ -24,7 +24,14 @@ interface Item {
 // With no query, list this many sessions so the dialog is useful before typing.
 const DEFAULT_LIMIT = 8;
 
-export function SearchDialog({ open, onOpenChange, projects, sessions, onSelectProject, onSelectSession }: SearchDialogProps) {
+export function SearchDialog({
+  open,
+  onOpenChange,
+  projects,
+  sessions,
+  onSelectProject,
+  onSelectSession,
+}: SearchDialogProps) {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -48,7 +55,9 @@ export function SearchDialog({ open, onOpenChange, projects, sessions, onSelectP
       open: () => onSelectProject(project),
     }));
     if (!needle) return sessionItems.slice(0, DEFAULT_LIMIT);
-    return [...sessionItems, ...projectItems].filter(item => item.title.toLowerCase().includes(needle) || item.subtitle.toLowerCase().includes(needle));
+    return [...sessionItems, ...projectItems].filter(
+      item => item.title.toLowerCase().includes(needle) || item.subtitle.toLowerCase().includes(needle),
+    );
   }, [query, projects, sessions, onSelectProject, onSelectSession]);
 
   // Start from the first result whenever the list changes.
@@ -83,7 +92,13 @@ export function SearchDialog({ open, onOpenChange, projects, sessions, onSelectP
   }
 
   return (
-    <Dialog open={open} onOpenChange={next => { if (!next) setQuery(''); onOpenChange(next); }}>
+    <Dialog
+      open={open}
+      onOpenChange={next => {
+        if (!next) setQuery('');
+        onOpenChange(next);
+      }}
+    >
       <DialogContent className="max-w-xl gap-0 overflow-hidden" showCloseButton={false}>
         <DialogTitle className="sr-only">Search</DialogTitle>
         <DialogDescription className="sr-only">ค้นหา session และ project</DialogDescription>
@@ -119,7 +134,11 @@ export function SearchDialog({ open, onOpenChange, projects, sessions, onSelectP
                 onClick={() => choose(item)}
                 className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm ${index === active ? 'bg-muted' : ''}`}
               >
-                {item.kind === 'session' ? <MessageSquare className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" /> : <FolderOpen className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
+                {item.kind === 'session' ? (
+                  <MessageSquare className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                ) : (
+                  <FolderOpen className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                )}
                 <span className="min-w-0 flex-1 truncate">{item.title}</span>
                 <span className="max-w-40 shrink-0 truncate text-xs text-muted-foreground">{item.subtitle}</span>
               </button>

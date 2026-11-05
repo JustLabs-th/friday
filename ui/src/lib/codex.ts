@@ -1,9 +1,9 @@
 import { useSyncExternalStore } from 'react';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { Message } from '@/components/chat-view';
-import type { ConfirmationRequest } from '@/components/confirmation';
-import type { PlanData } from '@/components/plan';
+import type { Message } from '@/components/chat/chat-view';
+import type { ConfirmationRequest } from '@/components/chat/confirmation';
+import type { PlanData } from '@/components/chat/plan';
 import type { ModelInfo, Effort } from '@/lib/models';
 
 export interface EngineInfo { connectionId: number; binary: string; cwd: string; server: { userAgent?: string } }

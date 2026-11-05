@@ -24,7 +24,13 @@ export interface PlanData {
 function StepIcon({ status }: { status: PlanStep['status'] }) {
   return (
     <TraceIcon spin={false}>
-      {status === 'done' ? <CircleCheckIcon aria-hidden="true" /> : status === 'running' ? <CircleDotIcon aria-hidden="true" /> : <CircleIcon aria-hidden="true" />}
+      {status === 'done' ? (
+        <CircleCheckIcon aria-hidden="true" />
+      ) : status === 'running' ? (
+        <CircleDotIcon aria-hidden="true" />
+      ) : (
+        <CircleIcon aria-hidden="true" />
+      )}
     </TraceIcon>
   );
 }
@@ -37,9 +43,13 @@ export function Plan({ plan }: { plan: PlanData }) {
       <TraceCollapsible defaultOpen>
         <TraceCollapsibleTrigger>
           <TraceLine status={running ? 'running' : undefined}>
-            <TraceIcon spin={false}><RouteIcon aria-hidden="true" /></TraceIcon>
+            <TraceIcon spin={false}>
+              <RouteIcon aria-hidden="true" />
+            </TraceIcon>
             <TraceTitle>Plan: {plan.title}</TraceTitle>
-            <TraceDescription>{done} of {plan.steps.length} done</TraceDescription>
+            <TraceDescription>
+              {done} of {plan.steps.length} done
+            </TraceDescription>
           </TraceLine>
         </TraceCollapsibleTrigger>
         <TraceCollapsibleContent>
