@@ -1,0 +1,5 @@
+/target/
+/gen/schemas/
+
+# The repo root ignores "Icon?" (macOS), which also matches "icons" on case-insensitive systems.
+!/icons/
