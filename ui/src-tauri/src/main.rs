@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod codex;
+mod gateway_auth;
 mod scheduler;
 mod skills;
 use tauri::Manager;
@@ -23,6 +24,9 @@ fn main() {
             scheduler::scheduler_run,
             scheduler::scheduler_stop,
             skills::skill_save,
+            gateway_auth::gateway_status,
+            gateway_auth::gateway_login,
+            gateway_auth::gateway_logout,
         ])
         .setup(|app| {
             let path = app.path().app_data_dir()?.join("scheduled-tasks-v1.json");

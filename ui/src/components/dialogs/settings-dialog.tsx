@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { Info, Moon, Palette, Search, Sun, type LucideIcon } from 'lucide-react';
+import { Info, Moon, Palette, Search, Sun, User, type LucideIcon } from 'lucide-react';
+import { GatewayAccount } from '@/components/dialogs/gateway-account';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -36,6 +37,7 @@ interface Section {
 }
 
 const sections: Section[] = [
+  { id: 'account', label: 'Account', icon: User, render: () => <GatewayAccount /> },
   {
     id: 'appearance',
     label: 'Appearance',

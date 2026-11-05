@@ -19,3 +19,9 @@ chrono-tz = "0.10"
 croner = "3"
 uuid = { version = "1", features = ["v4"] }
 tokio = { version = "1", features = ["io-util", "process", "sync", "time"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-native-roots"] }
+keyring = { version = "3", features = ["windows-native", "apple-native", "sync-secret-service"] }
+sha2 = "0.10"
+base64 = "0.22"
+rand = "0.8"
+url = "2"
