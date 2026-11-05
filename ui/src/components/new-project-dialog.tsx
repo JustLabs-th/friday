@@ -50,7 +50,7 @@ export function NewProjectDialog({ open: isOpen, onOpenChange, onCreate }: NewPr
       id: crypto.randomUUID(),
       name: trimmed,
       prompt: prompt.trim(),
-      path: folder,
+      path: folder.trim(),
     });
     reset();
     onOpenChange(false);
@@ -92,9 +92,7 @@ export function NewProjectDialog({ open: isOpen, onOpenChange, onCreate }: NewPr
             <div className="flex flex-col gap-1.5">
               <span className="text-xs font-medium">โฟลเดอร์ในเครื่อง</span>
               <div className="flex items-center gap-2">
-                <div className="min-w-0 flex-1 truncate rounded-lg border border-input px-2.5 py-1.5 text-sm text-muted-foreground" title={folder}>
-                  {folder || 'ยังไม่ได้เลือกโฟลเดอร์'}
-                </div>
+                <Input aria-label="Project folder" className="min-w-0 flex-1" value={folder} onChange={event => setFolder(event.target.value)} placeholder="Absolute project path" />
                 <Button
                   type="button"
                   variant="outline"
@@ -113,7 +111,7 @@ export function NewProjectDialog({ open: isOpen, onOpenChange, onCreate }: NewPr
             <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
               ยกเลิก
             </Button>
-            <Button type="submit" disabled={!name.trim()}>
+            <Button type="submit" disabled={!name.trim() || !folder.trim()}>
               สร้าง project
             </Button>
           </DialogFooter>

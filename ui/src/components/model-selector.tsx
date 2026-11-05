@@ -2,23 +2,25 @@ import { Fragment } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { InputGroupButton } from '@/components/ui/input-group';
-import { effortLabels, models, type Effort, type ModelInfo } from '@/lib/models';
+import { effortLabels, models as defaultModels, type Effort, type ModelInfo } from '@/lib/models';
 
 interface ModelSelectorProps {
   modelId: string;
   effort: Effort;
   onModelChange: (model: ModelInfo) => void;
   onEffortChange: (effort: Effort) => void;
+  models?: ModelInfo[];
+  disabled?: boolean;
 }
 
-const families = Array.from(new Set(models.map(item => item.family)));
-
-export function ModelSelector({ modelId, effort, onModelChange, onEffortChange }: ModelSelectorProps) {
+export function ModelSelector({ modelId, effort, onModelChange, onEffortChange, models = defaultModels, disabled = false }: ModelSelectorProps) {
+  const families = Array.from(new Set(models.map(item => item.family)));
   const current = models.find(item => item.id === modelId) ?? models[0];
+  if (!current) return <span className="text-xs text-muted-foreground">Codex default</span>;
   return (
     <div className="flex items-center gap-1">
       <DropdownMenu>
-        <DropdownMenuTrigger render={<InputGroupButton type="button" variant="ghost" size="xs" aria-label={`Model: ${current.name}`} />}>
+        <DropdownMenuTrigger render={<InputGroupButton type="button" variant="ghost" size="xs" disabled={disabled} aria-label={`Model: ${current.name}`} />}>
           {current.name}
           <ChevronDown aria-hidden="true" />
         </DropdownMenuTrigger>
@@ -46,7 +48,7 @@ export function ModelSelector({ modelId, effort, onModelChange, onEffortChange }
       </DropdownMenu>
 
       <DropdownMenu>
-        <DropdownMenuTrigger render={<InputGroupButton type="button" variant="ghost" size="xs" aria-label={`Effort: ${effortLabels[effort]}`} />}>
+        <DropdownMenuTrigger render={<InputGroupButton type="button" variant="ghost" size="xs" disabled={disabled || !current.efforts.length} aria-label={`Effort: ${effortLabels[effort]}`} />}>
           {effortLabels[effort]}
           <ChevronDown aria-hidden="true" />
         </DropdownMenuTrigger>

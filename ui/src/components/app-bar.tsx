@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
-import { ChevronDown, Copy, CopyIcon, Ellipsis, FolderOpen, Pencil, Trash2, Globe, Menu, Minus, PanelRight, ScanSearch, SquareArrowOutUpRight, SquareTerminal, Square, X, ArrowLeft, ArrowRight, Check } from 'lucide-react';
+import { ChevronDown, Copy, CopyIcon, BookPlus, Ellipsis, FolderOpen, Pencil, Trash2, Globe, Menu, Minus, PanelRight, ScanSearch, SquareArrowOutUpRight, SquareTerminal, Square, X, ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import type { Project } from '@/components/new-project-dialog';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -33,6 +33,8 @@ interface AppBarProps {
   projectPath: string | null;
   onDeleteProject: (() => void) | null;
   onRenameProject: (() => void) | null;
+  /** Turns the open session into a skill; null when there is nothing to save. */
+  onSaveAsSkill: (() => void) | null;
 }
 
 async function copyText(text: string) {
@@ -81,6 +83,7 @@ export function AppBar({
   projectPath,
   onDeleteProject,
   onRenameProject,
+  onSaveAsSkill,
 }: AppBarProps) {
   const [maximized, setMaximized] = useState(false);
 
@@ -188,6 +191,9 @@ export function AppBar({
             <Ellipsis aria-hidden="true" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuItem disabled={!onSaveAsSkill} onClick={() => onSaveAsSkill && window.setTimeout(onSaveAsSkill, 0)}>
+              <BookPlus aria-hidden="true" />Save session as skill
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onRenameProject && window.setTimeout(onRenameProject, 0)}>
               <Pencil aria-hidden="true" />Rename project
             </DropdownMenuItem>

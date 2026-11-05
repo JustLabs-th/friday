@@ -34,9 +34,13 @@ interface ChatViewProps {
   subtitle?: string;
   detail?: string;
   messages: Message[];
-  onSend: (text: string, files: File[]) => void;
+  onSend: (text: string, files: File[]) => void | boolean | Promise<boolean | void>;
   controls?: ReactNode;
   onResolveConfirmation: (messageId: string, confirmationId: string, approved: boolean) => void;
+  connection?: { status: string; error: string; label: string; onReconnect: () => void; onDismiss: () => void };
+  running?: boolean;
+  loading?: boolean;
+  onStop?: () => void;
 }
 
 function CopyMessageButton({ text }: { text: string }) {
@@ -65,7 +69,7 @@ function CopyMessageButton({ text }: { text: string }) {
   );
 }
 
-export function ChatView({ title, subtitle, detail, messages, onSend, controls, onResolveConfirmation }: ChatViewProps) {
+export function ChatView({ title, subtitle, detail, messages, onSend, controls, onResolveConfirmation, connection, running = false, loading = false, onStop }: ChatViewProps) {
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' });
@@ -73,6 +77,7 @@ export function ChatView({ title, subtitle, detail, messages, onSend, controls, 
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
+      {connection?.error && <div role="alert" className="flex items-center gap-3 border-b bg-destructive/5 px-5 py-3 text-sm text-destructive"><span className="min-w-0 flex-1 break-words">{connection.error}</span><button type="button" onClick={connection.onReconnect} className="shrink-0 underline">เชื่อมต่อใหม่</button><button type="button" aria-label="Dismiss error" onClick={connection.onDismiss}>×</button></div>}
       <div className="min-h-0 flex-1 overflow-y-auto pb-44">
         {messages.length === 0 ? (
           <div className="flex h-full items-center justify-center p-8">
@@ -119,6 +124,7 @@ export function ChatView({ title, subtitle, detail, messages, onSend, controls, 
                 </div>
               </div>
             ))}
+            {(running || loading) && <p role="status" className="text-xs text-muted-foreground">{loading ? 'กำลังโหลด session…' : 'Codex กำลังทำงาน…'}</p>}
             <div ref={endRef} />
           </div>
         )}
@@ -126,8 +132,8 @@ export function ChatView({ title, subtitle, detail, messages, onSend, controls, 
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] h-28 bg-gradient-to-t from-background/90 to-transparent" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10">
         <div className="pointer-events-auto mx-auto w-full max-w-3xl px-6 pb-4">
-          <PromptInput onSend={onSend} placeholder="พิมพ์ข้อความถึง Codex..." controls={controls} />
-          <p className="mt-2 text-center text-xs text-muted-foreground">ยังไม่ได้เชื่อมต่อ Codex engine จึงยังไม่มีคำตอบกลับ</p>
+          <PromptInput onSend={onSend} placeholder="พิมพ์ข้อความถึง Codex..." controls={controls} disabled={connection ? connection.status !== 'ready' || loading : false} running={running} onStop={onStop} />
+          <p className="mt-2 flex items-center justify-center gap-2 text-center text-xs text-muted-foreground" data-testid="codex-status">{connection?.label || 'UI preview'}{connection?.status === 'error' && <button type="button" onClick={connection.onReconnect} className="underline">เชื่อมต่อใหม่</button>}</p>
         </div>
       </div>
     </div>

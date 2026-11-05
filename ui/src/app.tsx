@@ -1,15 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { isTauri } from '@tauri-apps/api/core';
+import { codex, samePath, useCodex } from '@/lib/codex';
 import { AppSidebar, type Page, type Session } from '@/components/app-sidebar';
 import { NewProjectDialog, type Project } from '@/components/new-project-dialog';
 import { AppBar } from '@/components/app-bar';
-import { ChatView, type Message } from '@/components/chat-view';
+import { ChatView } from '@/components/chat-view';
+import { ScheduledTasks } from '@/components/scheduled-tasks';
+import { SaveSkillDialog } from '@/components/save-skill-dialog';
+import type { JobInput, ScheduledRun } from '@/lib/scheduler';
+import { buildSkillDraft, type SavedSkill, type SkillDraft } from '@/lib/skills';
 import { ModelSelector } from '@/components/model-selector';
 import { RenameDialog } from '@/components/rename-dialog';
 import { SearchDialog } from '@/components/search-dialog';
 import { SettingsDialog } from '@/components/settings-dialog';
 import { RightPanel, TerminalPanel, type RightPanelTab } from '@/components/workbench-panels';
-import { models, type Effort } from '@/lib/models';
-import { sampleReply } from '@/lib/sample-markdown';
+import { type Effort } from '@/lib/models';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
@@ -20,101 +25,59 @@ interface History {
   index: number;
 }
 
-// Sample data for the in-memory demo only; nothing is persisted.
-const initialProjects: Project[] = [{ id: 'harness', name: 'harness', prompt: '', path: '' }];
-// Sample conversation so the assistant message layout can be reviewed; it did not come from Codex.
-const initialMessages: Record<string, Message[]> = {
-  s1: [
-    { id: 'm1', role: 'user', text: 'ช่วยเปรียบเทียบความเร็วของ LLM Harness ให้หน่อย', files: [] },
-    {
-      id: 'm2',
-      role: 'assistant',
-      files: [],
-      reasoning: {
-        seconds: 12,
-        text: 'The user wants a speed comparison. First list the candidate harnesses, then run one benchmark on each so the numbers are comparable, and only then summarise.',
-      },
-      plan: {
-        title: 'compare harness speed',
-        steps: [
-          { id: 'p1', title: 'Collect the harness candidates', status: 'done' },
-          { id: 'p2', title: 'Run the same benchmark on each', status: 'running' },
-          { id: 'p3', title: 'Summarise the results', status: 'pending' },
-        ],
-      },
-      steps: [
-        { id: 'st1', title: 'Read codex-rs/README.md' },
-        { id: 'st2', title: 'Searched the code for models.json', tags: ['models-manager', 'models.json'] },
-        { id: 'st3', title: 'Ran pnpm ui:check', output: '> friday-ui@0.1.0 check\n> tsc --noEmit\n\nNo errors.' },
-        { id: 'st4', title: 'Failed to read bench/results.csv', status: 'error', output: "ENOENT: no such file or directory, open 'bench/results.csv'" },
-      ],
-      runs: [
-        {
-          id: 'r1',
-          title: 'Ran pnpm ui:check',
-          state: 'completed',
-          code: 'pnpm ui:check',
-          output: '> friday-ui@0.1.0 check\n> tsc --noEmit\n\nNo errors.',
-        },
-        {
-          id: 'r2',
-          title: 'Ran python bench/run.py',
-          state: 'error',
-          collapsed: true,
-          code: 'python bench/run.py',
-          output: "Traceback (most recent call last):\n  File \"bench/run.py\", line 1, in <module>\nFileNotFoundError: bench/results.csv",
-        },
-        {
-          id: 'r3',
-          title: 'Running pnpm ui:build',
-          state: 'running',
-          collapsed: true,
-          code: 'pnpm ui:build',
-          output: 'vite v8.3.5 building for production...',
-        },
-      ],
-      errors: [
-        [
-          "Error: ENOENT: no such file or directory, open 'bench/results.csv'",
-          'at readResults (src/bench/read.ts:14:22)',
-          'at runBenchmark (src/bench/run.ts:31:9)',
-          'at async main (src/index.ts:8:3)',
-          'at Object.openSync (node:fs:573:18)',
-          'at Module._compile (node_modules/ts-node/dist/index.js:1621:23)',
-        ].join('\n'),
-      ],
-      confirmations: [{ id: 'c1', command: 'pnpm ui:build', state: 'requested' }],
-      text: sampleReply,
-      sources: [
-        { url: 'https://github.com/openai/codex', title: 'openai/codex on GitHub' },
-        { url: 'https://tauri.app/start/' },
-        { url: 'https://ui.shadcn.com/docs/components' },
-        { url: 'https://tauri.app/start/' },
-      ],
-    },
-  ],
-};
-const initialSessions: Record<string, Session[]> = {
-  harness: [
-    { id: 's1', title: 'เปรียบเทียบความเร็ว LLM Harness' },
-    { id: 's2', title: 'หา Open Source Harness' },
-    { id: 's3', title: 'ร่างพิดช์ของบประมาณ' },
-    { id: 's4', title: 'เปรียบเทียบ REST Framework Python' },
-    { id: 's5', title: 'เลือกภาษาเขียน Harness V1' },
-  ],
-};
+const PROJECTS_KEY = 'friday.projects.v1';
+function readProjects(): Project[] {
+  try {
+    const data: unknown = JSON.parse(localStorage.getItem(PROJECTS_KEY) || '[]');
+    return Array.isArray(data) ? data.filter((item): item is Project =>
+      !!item && typeof item === 'object' && typeof item.id === 'string' &&
+      typeof item.name === 'string' && typeof item.path === 'string' && typeof item.prompt === 'string') : [];
+  } catch { return []; }
+}
 
 export function App() {
   const [history, setHistory] = useState<History>({ stack: ['home'], index: 0 });
   const [dark, setDark] = useState(false);
-  const [projects, setProjects] = useState<Project[]>(initialProjects);
-  const [sessions, setSessions] = useState<Record<string, Session[]>>(initialSessions);
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(initialProjects[0].id);
+  const engine = useCodex();
+  const [projects, setProjects] = useState<Project[]>(readProjects);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(() => readProjects()[0]?.id || null);
+  const configuredAtMount = useRef(false);
+  const startupComplete = useRef(false);
+  const startingSession = useRef(false);
+  useEffect(() => {
+    try { configuredAtMount.current = localStorage.getItem(PROJECTS_KEY) !== null; } catch { /* unavailable storage */ }
+    if (isTauri()) void codex.connect().catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (engine.status !== 'ready' || !engine.info || startupComplete.current) return;
+    startupComplete.current = true;
+    if (!projects.length && !configuredAtMount.current) {
+      const path = engine.info.cwd;
+      const project = { id: crypto.randomUUID(), name: path.split(/[\\/]/).filter(Boolean).pop() || 'Friday', path, prompt: '' };
+      setProjects([project]); setActiveProjectId(project.id);
+    }
+  }, [engine.status, engine.info, projects.length]);
+  useEffect(() => {
+    if (!projects.length && !startupComplete.current) return;
+    try { localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects)); } catch { /* keep in memory */ }
+  }, [projects]);
+  const projectPaths = projects.map(project => project.path).filter(Boolean).sort().join('\0');
+  useEffect(() => {
+    if (engine.status === 'ready') void Promise.all(projectPaths.split('\0').filter(Boolean).map(path => codex.loadProject(path))).catch(codex.report);
+  }, [engine.status, projectPaths]);
+  const sessions: Record<string, Session[]> = Object.fromEntries(projects.map(project => [
+    project.id,
+    Object.values(engine.threads).filter(thread => samePath(thread.cwd, project.path))
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+      .map(thread => ({ id: thread.id, title: thread.name || thread.preview || 'New session' })),
+  ]));
+  const messages = engine.messages;
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Record<string, Message[]>>(initialMessages);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [skillDraft, setSkillDraft] = useState<SkillDraft | null>(null);
+  const [schedulePrefill, setSchedulePrefill] = useState<Partial<JobInput> | null>(null);
 
   // Ctrl+K (Cmd+K on macOS) opens the search from anywhere.
   useEffect(() => {
@@ -130,8 +93,16 @@ export function App() {
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [rightPanelTab, setRightPanelTab] = useState<RightPanelTab>('overview');
-  const [modelId, setModelId] = useState(models[0].id);
-  const [effort, setEffort] = useState<Effort>(models[0].defaultEffort);
+  const [modelId, setModelId] = useState('');
+  const [effort, setEffort] = useState<Effort>('medium');
+  useEffect(() => {
+    if (!engine.models.length) return;
+    const selected = engine.models.find(model => model.id === modelId);
+    if (!selected) {
+      const fallback = engine.models.find(model => model.id === engine.defaultModel) || engine.models[0];
+      setModelId(fallback.id); setEffort(fallback.defaultEffort);
+    } else if (selected.efforts.length && !selected.efforts.includes(effort)) setEffort(selected.defaultEffort);
+  }, [engine.models, engine.defaultModel, modelId, effort]);
   const [pendingRename, setPendingRename] = useState<
     { kind: 'project'; project: Project } | { kind: 'session'; project: Project; session: Session } | null
   >(null);
@@ -171,77 +142,56 @@ export function App() {
     setActiveProjectId(project.id);
     setActiveSessionId(item.id);
     navigate('home');
+    void codex.resume(item.id).catch(codex.report);
   }
-  function startNewSession(project: Project) {
-    const created: Session = { id: crypto.randomUUID(), title: 'New session' };
-    setSessions(current => ({ ...current, [project.id]: [created, ...(current[project.id] ?? [])] }));
-    setActiveProjectId(project.id);
-    setActiveSessionId(created.id);
-    navigate('home');
+  async function startNewSession(project: Project) {
+    if (startingSession.current) return;
+    startingSession.current = true;
+    try {
+      const thread = await codex.start(project.path, project.prompt);
+      setActiveProjectId(project.id); setActiveSessionId(thread.id); navigate('home');
+    } catch (error) { codex.report(error); }
+    finally { startingSession.current = false; }
   }
-  function confirmDelete() {
+  async function confirmDelete() {
     if (!pendingDelete) return;
-    if (pendingDelete.kind === 'project') {
-      const removedId = pendingDelete.project.id;
-      const remaining = projects.filter(item => item.id !== removedId);
-      setProjects(remaining);
-      const removedSessionIds = (sessions[removedId] ?? []).map(item => item.id);
-      setSessions(current => {
-        const { [removedId]: _removed, ...rest } = current;
-        return rest;
-      });
-      setMessages(current => Object.fromEntries(Object.entries(current).filter(([key]) => !removedSessionIds.includes(key))));
-      if (activeProjectId === removedId) {
-        setActiveProjectId(remaining[0]?.id ?? null);
-        setActiveSessionId(null);
+    try {
+      if (pendingDelete.kind === 'project') {
+        const remaining = projects.filter(item => item.id !== pendingDelete.project.id);
+        setProjects(remaining);
+        if (activeProjectId === pendingDelete.project.id) {
+          setActiveProjectId(remaining[0]?.id || null); setActiveSessionId(null);
+        }
+      } else {
+        await codex.archive(pendingDelete.session.id);
+        if (activeSessionId === pendingDelete.session.id) setActiveSessionId(null);
       }
-    } else {
-      const { project, session } = pendingDelete;
-      setSessions(current => ({ ...current, [project.id]: (current[project.id] ?? []).filter(item => item.id !== session.id) }));
-      setMessages(current => {
-        const { [session.id]: _removed, ...rest } = current;
-        return rest;
-      });
-      if (activeSessionId === session.id) setActiveSessionId(null);
-    }
-    setPendingDelete(null);
+      setPendingDelete(null);
+    } catch (error) { codex.report(error); }
   }
-  function sendMessage(text: string, files: File[]) {
-    if (!activeProject) return;
-    let sessionId = activeSessionId;
-    if (!sessionId) {
-      const created: Session = { id: crypto.randomUUID(), title: text.slice(0, 40) };
-      sessionId = created.id;
-      setSessions(current => ({ ...current, [activeProject.id]: [created, ...(current[activeProject.id] ?? [])] }));
-      setActiveSessionId(created.id);
-    } else if (!(messages[sessionId]?.length) && activeSession?.title === 'New session') {
-      const targetId = sessionId;
-      setSessions(current => ({ ...current, [activeProject.id]: (current[activeProject.id] ?? []).map(item => item.id === targetId ? { ...item, title: text.slice(0, 40) } : item) }));
-    }
-    const id = sessionId;
-    const message: Message = { id: crypto.randomUUID(), role: 'user', text, files: files.map(file => file.name) };
-    setMessages(current => ({ ...current, [id]: [...(current[id] ?? []), message] }));
+  async function sendMessage(text: string, files: File[]) {
+    if (!activeProject) return false;
+    try {
+      let id = activeSessionId;
+      if (!id) {
+        const thread = await codex.start(activeProject.path, activeProject.prompt);
+        id = thread.id; setActiveSessionId(id);
+      }
+      await codex.send(id, text, files, modelId, effort);
+      return true;
+    } catch (error) { codex.report(error); return false; }
   }
-  function resolveConfirmation(messageId: string, confirmationId: string, approved: boolean) {
-    if (!activeSessionId) return;
-    const sessionId = activeSessionId;
-    setMessages(current => ({
-      ...current,
-      [sessionId]: (current[sessionId] ?? []).map(message => message.id !== messageId ? message : {
-        ...message,
-        confirmations: message.confirmations?.map(request => request.id !== confirmationId ? request : { ...request, state: approved ? 'approved' : 'denied' }),
-      }),
-    }));
+  function resolveConfirmation(_messageId: string, confirmationId: string, approved: boolean) {
+    void codex.respond(confirmationId, approved).catch(codex.report);
   }
-  function renamePending(name: string) {
+  async function renamePending(name: string) {
     if (!pendingRename) return;
-    if (pendingRename.kind === 'project') {
-      const id = pendingRename.project.id;
-      setProjects(current => current.map(item => item.id === id ? { ...item, name } : item));
-    } else {
-      const { project, session } = pendingRename;
-      setSessions(current => ({ ...current, [project.id]: (current[project.id] ?? []).map(item => item.id === session.id ? { ...item, title: name } : item) }));
-    }
+    try {
+      if (pendingRename.kind === 'project') {
+        const id = pendingRename.project.id;
+        setProjects(current => current.map(item => item.id === id ? { ...item, name } : item));
+      } else await codex.rename(pendingRename.session.id, name);
+    } catch (error) { codex.report(error); }
   }
   function createProject(project: Project) {
     setProjects(current => [project, ...current]);
@@ -250,16 +200,38 @@ export function App() {
     navigate('home');
   }
 
+  function openScheduledSession(run: ScheduledRun) {
+    if (!run.threadId) return;
+    let project = projects.find(project => samePath(project.path, run.cwd));
+    if (!project) {
+      project = { id: crypto.randomUUID(), name: run.cwd.split(/[\\/]/).filter(Boolean).pop() || run.jobName, path: run.cwd, prompt: '' };
+      const added = project;
+      setProjects(current => [...current, added]);
+    }
+    selectSession({ id: run.threadId, title: run.jobName }, project);
+    void codex.loadProject(run.cwd).catch(codex.report);
+  }
+  function scheduleSkill(skill: SavedSkill, projectPath: string | null) {
+    setSchedulePrefill({
+      name: skill.name,
+      cwd: projectPath ?? activeProject?.path ?? '',
+      prompt: `Run the ${skill.name} skill.`,
+      skill: { name: skill.name, path: skill.path },
+    });
+    navigate('scheduled');
+  }
+  const scheduledPage = history.stack[history.index] === 'scheduled';
+
   return (
     <TooltipProvider>
       <SidebarProvider className="h-svh min-h-0 flex-col overflow-hidden">
         <AppBar
-          title={activeProject?.name ?? 'Friday'}
+          title={scheduledPage ? 'Scheduled tasks' : activeProject?.name ?? 'Friday'}
           projects={projects}
           activeProjectId={activeProjectId}
           onSelectProject={selectProject}
           onNewProject={() => setNewProjectOpen(true)}
-          canCreateSession={activeProject !== null}
+          canCreateSession={activeProject !== null && engine.status === 'ready'}
           canGoBack={history.index > 0}
           canGoForward={history.index < history.stack.length - 1}
           onBack={goBack}
@@ -275,6 +247,9 @@ export function App() {
           projectPath={activeProject?.path || null}
           onDeleteProject={activeProject ? () => setPendingDelete({ kind: 'project', project: activeProject }) : null}
           onRenameProject={activeProject ? () => setPendingRename({ kind: 'project', project: activeProject }) : null}
+          onSaveAsSkill={activeSession && (messages[activeSession.id]?.length ?? 0) > 0
+            ? () => setSkillDraft(buildSkillDraft(activeSession.title, messages[activeSession.id] ?? []))
+            : null}
         />
         <div className="flex min-h-0 flex-1">
           <AppSidebar
@@ -294,9 +269,10 @@ export function App() {
             onRenameSession={(session, project) => setPendingRename({ kind: 'session', session, project })}
           />
           <SidebarInset className="min-h-0 min-w-0">
+            {!activeProject && engine.error && <div role="alert" className="border-b px-5 py-3 text-sm text-destructive">{engine.error}<button className="ml-3 underline" onClick={() => { void codex.connect().catch(codex.report); }}>เชื่อมต่อใหม่</button></div>}
             <div className="flex min-h-0 min-w-0 flex-1">
             <main className="flex min-h-0 min-w-0 flex-1 flex-col" aria-labelledby="page-title">
-              {activeProject ? (
+              {scheduledPage ? <ScheduledTasks projects={projects} models={engine.models} onOpenSession={openScheduledSession} prefill={schedulePrefill} onPrefillUsed={() => setSchedulePrefill(null)} /> : activeProject ? (
                 <ChatView
                   title={activeSession?.title ?? activeProject.name}
                   subtitle={activeSession ? undefined : activeProject.path || undefined}
@@ -304,8 +280,19 @@ export function App() {
                   messages={activeSession ? messages[activeSession.id] ?? [] : []}
                   onSend={sendMessage}
                   onResolveConfirmation={resolveConfirmation}
+                  running={!!(activeSessionId && engine.running[activeSessionId])}
+                  loading={!!(activeSessionId && engine.loading[activeSessionId])}
+                  onStop={() => { if (activeSessionId) void codex.stop(activeSessionId).catch(codex.report); }}
+                  connection={{
+                    status: engine.status, error: engine.error,
+                    label: engine.status === 'ready' ? 'Codex connected · workspace access · approvals on request' : engine.status === 'connecting' ? 'กำลังเชื่อมต่อ Codex…' : engine.status === 'browser' ? 'เปิด Friday Desktop เพื่อเชื่อมต่อ Codex' : 'Codex disconnected',
+                    onReconnect: () => { void codex.connect().catch(codex.report); },
+                    onDismiss: codex.clearError,
+                  }}
                   controls={
                     <ModelSelector
+                      models={engine.models}
+                      disabled={engine.status !== 'ready' || !!(activeSessionId && engine.running[activeSessionId])}
                       modelId={modelId}
                       effort={effort}
                       onModelChange={next => {
@@ -327,9 +314,9 @@ export function App() {
                 </div>
               )}
             </main>
-            {rightPanelOpen && <RightPanel tab={rightPanelTab} onTabChange={setRightPanelTab} onClose={() => setRightPanelOpen(false)} project={activeProject} runs={activeRuns} />}
+            {!scheduledPage && rightPanelOpen && <RightPanel tab={rightPanelTab} onTabChange={setRightPanelTab} onClose={() => setRightPanelOpen(false)} project={activeProject} runs={activeRuns} />}
             </div>
-            {terminalOpen && <TerminalPanel onClose={() => setTerminalOpen(false)} />}
+            {!scheduledPage && terminalOpen && <TerminalPanel runs={activeRuns} onClose={() => setTerminalOpen(false)} />}
           </SidebarInset>
         </div>
         {pendingRename && (
@@ -340,8 +327,17 @@ export function App() {
             onClose={() => setPendingRename(null)}
           />
         )}
+        {skillDraft && activeProject && (
+          <SaveSkillDialog
+            draft={skillDraft}
+            projectName={activeProject.name}
+            projectPath={activeProject.path || null}
+            onClose={() => setSkillDraft(null)}
+            onSchedule={scheduleSkill}
+          />
+        )}
         <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} projects={projects} sessions={sessions} onSelectProject={selectProject} onSelectSession={selectSession} />
-        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} dark={dark} onSetDark={setTheme} />
+        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} dark={dark} onSetDark={setTheme} engineLabel={engine.status === 'ready' ? 'Connected' : engine.status} enginePath={engine.info?.binary} onReconnect={() => { void codex.connect().catch(codex.report); }} />
         <NewProjectDialog open={newProjectOpen} onOpenChange={setNewProjectOpen} onCreate={createProject} />
         <AlertDialog open={pendingDelete !== null} onOpenChange={open => { if (!open) setPendingDelete(null); }}>
           <AlertDialogContent>
@@ -351,9 +347,9 @@ export function App() {
               </AlertDialogTitle>
               <AlertDialogDescription>
                 {pendingDelete?.kind === 'project'
-                  ? `ลบ "${pendingDelete.project.name}" และ session ทั้งหมดในนั้น การลบนี้ไม่สามารถย้อนกลับได้ (ไม่ลบไฟล์ในโฟลเดอร์)`
+                  ? `ลบ "${pendingDelete.project.name}" ออกจาก Friday โดยไม่ลบไฟล์หรือประวัติใน Codex`
                   : pendingDelete?.kind === 'session'
-                    ? `ลบ session "${pendingDelete.session.title}" การลบนี้ไม่สามารถย้อนกลับได้`
+                    ? `ลบ session "${pendingDelete.session.title}" ออกจากรายการ โดยเก็บประวัติไว้ใน Codex`
                     : ''}
               </AlertDialogDescription>
             </AlertDialogHeader>

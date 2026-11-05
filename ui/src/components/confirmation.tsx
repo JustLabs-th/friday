@@ -7,7 +7,10 @@ export interface ConfirmationRequest {
   id: string;
   /** The command the assistant wants to run. */
   command: string;
-  state: 'requested' | 'approved' | 'denied';
+  state: 'requested' | 'approved' | 'denied' | 'resolved';
+  kind?: 'command' | 'files';
+  reason?: string;
+  cwd?: string;
 }
 
 interface ConfirmationProps {
@@ -25,9 +28,11 @@ export function Confirmation({ request, onApprove, onDeny }: ConfirmationProps) 
         </ItemMedia>
         <ItemContent>
           <ItemTitle className="min-w-0">
-            <span className="truncate">Run <code className="font-mono">{request.command}</code>?</span>
+            <span className="min-w-0">{request.kind === 'files' ? 'Allow file changes?' : 'Allow command once?'}</span>
           </ItemTitle>
-          <ItemDescription>The command runs in this project.</ItemDescription>
+          <ItemDescription>{request.reason || 'Codex is waiting for your decision.'}</ItemDescription>
+          <pre className="mt-2 max-h-52 overflow-auto whitespace-pre-wrap break-all text-xs">{request.command}</pre>
+          {request.cwd && <p className="mt-1 break-all text-xs text-muted-foreground">{request.cwd}</p>}
         </ItemContent>
         <ItemActions>
           <Button onClick={onDeny} size="sm" variant="outline">Deny</Button>
@@ -42,7 +47,7 @@ export function Confirmation({ request, onApprove, onDeny }: ConfirmationProps) 
     <Trace>
       <TraceLine>
         <TraceIcon>{approved ? <CircleCheckIcon aria-hidden="true" /> : <BanIcon aria-hidden="true" />}</TraceIcon>
-        <TraceTitle>{approved ? 'Approved' : 'Denied'} <code className="font-mono">{request.command}</code></TraceTitle>
+        <TraceTitle>{approved ? 'Approved' : request.state === 'resolved' ? 'Resolved' : 'Denied'} <code className="font-mono">{request.command}</code></TraceTitle>
       </TraceLine>
     </Trace>
   );

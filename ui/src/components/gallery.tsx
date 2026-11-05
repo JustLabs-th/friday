@@ -8,6 +8,7 @@ import { Markdown } from '@/components/markdown';
 import { PromptInput } from '@/components/prompt-input';
 import { Reasoning } from '@/components/reasoning';
 import { SandboxRun } from '@/components/sandbox-run';
+import { SaveSkillDialog } from '@/components/save-skill-dialog';
 import { SettingsDialog } from '@/components/settings-dialog';
 import { Sources } from '@/components/sources';
 import { StackTrace } from '@/components/stack-trace';
@@ -16,6 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Button } from '@/components/ui/button';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { models, type Effort } from '@/lib/models';
+import { buildSkillDraft } from '@/lib/skills';
 import { sampleCharts, sampleReply } from '@/lib/sample-markdown';
 
 function Group({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
@@ -54,6 +56,7 @@ export function Gallery() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [projectOpen, setProjectOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [skillOpen, setSkillOpen] = useState(false);
   const [tab, setTab] = useState<RightPanelTab>('overview');
   const [request, setRequest] = useState<ConfirmationRequest>({ id: 'a', command: 'pnpm ui:build', state: 'requested' });
 
@@ -193,10 +196,24 @@ export function Gallery() {
               <Button variant="outline" onClick={() => setProjectOpen(true)}>New project</Button>
               <Button variant="outline" onClick={() => setSettingsOpen(true)}>Settings</Button>
               <Button variant="outline" onClick={() => setDeleteOpen(true)}>Delete confirmation</Button>
+              <Button variant="outline" onClick={() => setSkillOpen(true)}>Save as skill</Button>
             </div>
           </Group>
         </div>
 
+        {skillOpen && (
+          <SaveSkillDialog
+            draft={buildSkillDraft('Weekly harness report', [
+              { id: '1', role: 'user', text: 'สรุปผล benchmark ของ harness ทุกตัวให้หน่อย', files: [] },
+              { id: '2', role: 'assistant', text: 'ได้ครับ', files: [], runs: [{ id: 'r', title: 'Ran pnpm ui:check', state: 'completed', code: 'pnpm ui:check' }] },
+              { id: '3', role: 'user', text: 'แล้วส่งเป็นตารางพร้อมกราฟ', files: [] },
+            ])}
+            projectName="harness"
+            projectPath="E:\\Projects\\harness"
+            onClose={() => setSkillOpen(false)}
+            onSchedule={() => undefined}
+          />
+        )}
         <NewProjectDialog open={projectOpen} onOpenChange={setProjectOpen} onCreate={() => undefined} />
         <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} dark={dark} onSetDark={setTheme} />
         <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>

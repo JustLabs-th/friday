@@ -9,6 +9,9 @@ interface SettingsDialogProps {
   onOpenChange: (open: boolean) => void;
   dark: boolean;
   onSetDark: (dark: boolean) => void;
+  engineLabel?: string;
+  enginePath?: string;
+  onReconnect?: () => void;
 }
 
 function SettingRow({ label, description, children }: { label: string; description?: string; children: ReactNode }) {
@@ -27,7 +30,7 @@ interface Section {
   id: string;
   label: string;
   icon: LucideIcon;
-  render: (props: Pick<SettingsDialogProps, 'dark' | 'onSetDark'>) => ReactNode;
+  render: (props: Pick<SettingsDialogProps, 'dark' | 'onSetDark' | 'engineLabel' | 'enginePath' | 'onReconnect'>) => ReactNode;
 }
 
 const sections: Section[] = [
@@ -52,20 +55,21 @@ const sections: Section[] = [
     id: 'about',
     label: 'About',
     icon: Info,
-    render: () => (
+    render: ({ engineLabel, enginePath, onReconnect }) => (
       <>
         <SettingRow label="Version" description="เวอร์ชันของ Friday UI">
           <span className="text-sm text-muted-foreground">0.1.0</span>
         </SettingRow>
-        <SettingRow label="Codex engine" description="เอนจินจาก codex-rs ยังไม่ได้เชื่อมต่อกับ UI">
-          <span className="text-sm text-muted-foreground">Not connected</span>
+        <SettingRow label="Codex engine" description={enginePath || 'ใช้ login และ configuration ของ Codex ในเครื่อง'}>
+          <span className="text-sm text-muted-foreground">{engineLabel || 'Not connected'}</span>
+          {onReconnect && <Button className="ml-2" variant="outline" size="sm" onClick={onReconnect}>Reconnect</Button>}
         </SettingRow>
       </>
     ),
   },
 ];
 
-export function SettingsDialog({ open, onOpenChange, dark, onSetDark }: SettingsDialogProps) {
+export function SettingsDialog({ open, onOpenChange, dark, onSetDark, engineLabel, enginePath, onReconnect }: SettingsDialogProps) {
   const [query, setQuery] = useState('');
   const [activeId, setActiveId] = useState(sections[0].id);
   const visible = sections.filter(item => item.label.toLowerCase().includes(query.trim().toLowerCase()));
@@ -100,7 +104,7 @@ export function SettingsDialog({ open, onOpenChange, dark, onSetDark }: Settings
           </nav>
           <div className="min-w-0 flex-1 overflow-y-auto p-6">
             <h2 className="mb-2 text-base font-semibold">{active.label}</h2>
-            {active.render({ dark, onSetDark })}
+            {active.render({ dark, onSetDark, engineLabel, enginePath, onReconnect })}
           </div>
         </div>
       </DialogContent>

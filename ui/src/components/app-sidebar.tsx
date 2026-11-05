@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { ChevronRight, Command, Ellipsis, FolderOpen, Pencil, Settings, SquarePen, Trash2 } from 'lucide-react';
+import { CalendarClock, ChevronRight, Command, Ellipsis, FolderOpen, Pencil, Settings, SquarePen, Trash2 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarRail, useSidebar } from '@/components/ui/sidebar';
 import type { Project } from '@/components/new-project-dialog';
 
-export type Page = 'home';
+export type Page = 'home' | 'scheduled';
 
 export interface Session {
   id: string;
@@ -151,6 +151,7 @@ export function AppSidebar({
                 <SquarePen aria-hidden="true" /><span>New project</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
+            <SidebarMenuItem><SidebarMenuButton tooltip="Scheduled tasks" onClick={() => navigate('scheduled')}><CalendarClock aria-hidden="true" /><span>Scheduled tasks</span></SidebarMenuButton></SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
         <SidebarGroup className="group-data-[collapsible=icon]:hidden">

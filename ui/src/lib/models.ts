@@ -1,6 +1,6 @@
 // Snapshot of the user-selectable models in codex-rs/models-manager/models.json
 // (entries with visibility "list"). Regenerate when that file changes.
-export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra';
+export type Effort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra';
 
 export interface ModelInfo {
   id: string;
@@ -11,6 +11,8 @@ export interface ModelInfo {
 }
 
 export const effortLabels: Record<Effort, string> = {
+  none: 'None',
+  minimal: 'Minimal',
   low: 'Low',
   medium: 'Medium',
   high: 'High',

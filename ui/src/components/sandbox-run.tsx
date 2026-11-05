@@ -16,6 +16,7 @@ export interface SandboxRunData {
   output?: string;
   /** Start collapsed. Runs are open by default. */
   collapsed?: boolean;
+  files?: { path: string; diff: string }[];
 }
 
 function StateBadge({ state }: { state: SandboxRunState }) {

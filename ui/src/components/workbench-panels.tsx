@@ -52,6 +52,10 @@ interface OverviewProps {
 }
 
 function Overview({ project, runs }: OverviewProps) {
+  const files = runs.flatMap(run => run.files || []);
+  const lines = files.flatMap(file => file.diff.split('\n'));
+  const added = lines.filter(line => line.startsWith('+') && !line.startsWith('+++')).length;
+  const removed = lines.filter(line => line.startsWith('-') && !line.startsWith('---')).length;
   const running = runs.filter(run => run.state === 'running');
   const finished = runs.length - running.length;
   return (
@@ -77,16 +81,16 @@ function Overview({ project, runs }: OverviewProps) {
       </Section>
 
       <Section title="Outputs">
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+        {files.length ? files.map((file, index) => <Row key={`${file.path}:${index}`} icon={FileTextIcon}>{file.path}</Row>) : <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <FileTextIcon className="size-4 shrink-0" aria-hidden="true" />
           ยังไม่มีไฟล์ที่ session นี้สร้าง
-        </p>
+        </p>}
       </Section>
 
       <Section title="Changes">
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm">
-            <span className="text-green-600 dark:text-green-400">+0</span> <span className="text-destructive">−0</span>
+            <span className="text-green-600 dark:text-green-400">+{added}</span> <span className="text-destructive">−{removed}</span>
           </span>
           <Button size="sm" variant="outline" disabled title="ยังไม่มีการเปลี่ยนแปลงให้สร้าง PR">
             <GitPullRequestIcon aria-hidden="true" />
@@ -165,7 +169,7 @@ export function RightPanel({ tab, onTabChange, onClose, project, runs }: RightPa
   );
 }
 
-export function TerminalPanel({ onClose }: { onClose: () => void }) {
+export function TerminalPanel({ onClose, runs = [] }: { onClose: () => void; runs?: SandboxRunData[] }) {
   return (
     <section aria-label="Terminal" className="flex h-48 shrink-0 flex-col border-t bg-background">
       <div className="flex items-center justify-between border-b px-3 py-1">
@@ -177,7 +181,7 @@ export function TerminalPanel({ onClose }: { onClose: () => void }) {
           <XIcon aria-hidden="true" />
         </Button>
       </div>
-      <EmptyState icon={SquareTerminal} title="ยังไม่ได้เชื่อมต่อเทอร์มินัล" detail="เมื่อเชื่อมกับ Codex แล้ว คำสั่งที่รันจะแสดงที่นี่" />
+      {runs.length ? <div className="min-h-0 flex-1 overflow-auto px-4 py-2 font-mono text-xs">{runs.map(run => <div key={run.id} className="mb-4"><p className="mb-1 text-muted-foreground">{run.code || run.title}</p><pre className="whitespace-pre-wrap">{run.output || (run.state === 'running' ? 'Running…' : run.state)}</pre></div>)}</div> : <EmptyState icon={SquareTerminal} title="ยังไม่มีคำสั่งใน session นี้" detail="คำสั่งและผลลัพธ์จาก Codex จะแสดงที่นี่" />}
     </section>
   );
 }

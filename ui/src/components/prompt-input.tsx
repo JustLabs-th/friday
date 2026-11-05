@@ -1,27 +1,38 @@
 import { useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
-import { ArrowUpIcon, FileIcon, PlusIcon, XIcon } from 'lucide-react';
+import { ArrowUpIcon, FileIcon, PlusIcon, SquareIcon, XIcon } from 'lucide-react';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from '@/components/ui/input-group';
 
 interface PromptInputProps {
-  onSend: (text: string, files: File[]) => void;
+  onSend: (text: string, files: File[]) => void | boolean | Promise<boolean | void>;
   placeholder?: string;
   disabled?: boolean;
   controls?: ReactNode;
+  sending?: boolean;
+  running?: boolean;
+  onStop?: () => void;
 }
 
-export function PromptInput({ onSend, placeholder = 'พิมพ์ข้อความ...', disabled = false, controls }: PromptInputProps) {
+export function PromptInput({ onSend, placeholder = 'พิมพ์ข้อความ...', disabled = false, controls, sending = false, running = false, onStop }: PromptInputProps) {
   const [text, setText] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const canSend = !disabled && text.trim().length > 0;
+  const [submitting, setSubmitting] = useState(false);
+  const canSend = !disabled && !sending && !running && !submitting && text.trim().length > 0;
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSend) return;
-    onSend(text.trim(), files);
-    setText('');
-    setFiles([]);
+    setSubmitting(true);
+    const sentText = text;
+    const sentFiles = files;
+    try {
+      const accepted = await onSend(text.trim(), files);
+      if (accepted !== false) {
+        setText(current => current === sentText ? '' : current);
+        setFiles(current => current === sentFiles ? [] : current);
+      }
+    } finally { setSubmitting(false); }
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -63,7 +74,6 @@ export function PromptInput({ onSend, placeholder = 'พิมพ์ข้อค
         <InputGroupTextarea
           aria-label="Message"
           className="min-h-14 p-3"
-          disabled={disabled}
           onChange={event => setText(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
@@ -82,7 +92,7 @@ export function PromptInput({ onSend, placeholder = 'พิมพ์ข้อค
             <PlusIcon aria-hidden="true" />
           </InputGroupButton>
           {controls}
-          <InputGroupButton
+          {running ? <InputGroupButton type="button" aria-label="Stop" className="ms-auto rounded-full" size="icon-sm" variant="default" onClick={onStop}><SquareIcon className="size-3" fill="currentColor" aria-hidden="true" /></InputGroupButton> : <InputGroupButton
             type="submit"
             aria-label="Send"
             className="ms-auto rounded-full"
@@ -91,7 +101,7 @@ export function PromptInput({ onSend, placeholder = 'พิมพ์ข้อค
             variant="default"
           >
             <ArrowUpIcon aria-hidden="true" />
-          </InputGroupButton>
+          </InputGroupButton>}
         </InputGroupAddon>
       </InputGroup>
     </form>
