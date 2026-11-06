@@ -8,8 +8,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$log = Join-Path $env:TEMP 'liam-network-setup.log'
-function Log($text) { Add-Content -LiteralPath $log -Value ("{0} {1}" -f (Get-Date -Format s), $text) }
+# Next to the script (the install folder), so it is found whichever account ran the installer.
+$log = Join-Path $PSScriptRoot 'network-setup.log'
+function Log($text) { try { Add-Content -LiteralPath $log -Value ("{0} {1}" -f (Get-Date -Format s), $text) } catch {} }
 
 # Only the names Liam uses. Edit here to add more.
 $records = [ordered]@{
@@ -61,6 +62,7 @@ function Update-Hosts([bool]$add) {
 }
 
 try {
+    Log "started: action=$Action as $([Security.Principal.WindowsIdentity]::GetCurrent().Name)"
     $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
     if (-not $HostsOnly -and -not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
         throw 'Administrator rights are required.'
@@ -76,7 +78,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "certutil failed with exit code $LASTEXITCODE" }
         }
         Update-Hosts $true
-        Log 'root CA trusted, hosts updated'
+        Log $(if ($HostsOnly) { 'hosts updated (test mode, CA skipped)' } else { 'root CA trusted, hosts updated' })
     }
     ipconfig.exe /flushdns | Out-Null
     exit 0
