@@ -29,7 +29,7 @@ import { useSearchShortcut } from '@/hooks/use-search-shortcut';
 function connectionLabel(status: string) {
   if (status === 'ready') return 'Liam connected · workspace access · approvals on request';
   if (status === 'connecting') return 'กำลังเชื่อมต่อ Liam…';
-  if (status === 'browser') return 'เปิด Friday Desktop เพื่อเชื่อมต่อ Liam';
+  if (status === 'browser') return 'เปิด Liam Desktop เพื่อเชื่อมต่อ Liam';
   return 'Liam disconnected';
 }
 

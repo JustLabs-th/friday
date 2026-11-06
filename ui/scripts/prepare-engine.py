@@ -9,6 +9,7 @@ import os, shutil, sys
 root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 dest = os.path.join(root, 'ui', 'src-tauri', 'engine')
 name = 'codex.exe' if os.name == 'nt' else 'codex'
+out_name = 'liam-engine.exe' if os.name == 'nt' else 'liam-engine'
 candidates = [
     os.environ.get('FRIDAY_CODEX_BIN'),
     os.path.join(root, 'codex-rs', 'target', 'release', name),
@@ -19,8 +20,8 @@ if not source:
     sys.exit('No Codex engine found. Set FRIDAY_CODEX_BIN to a codex executable.')
 
 os.makedirs(dest, exist_ok=True)
-shutil.copy2(source, os.path.join(dest, name))
+shutil.copy2(source, os.path.join(dest, out_name))
 for notice in ('LICENSE', 'NOTICE'):
     if os.path.isfile(os.path.join(root, notice)):
         shutil.copy2(os.path.join(root, notice), os.path.join(dest, notice))
-print(f'engine: {source} -> {dest} ({os.path.getsize(os.path.join(dest, name)) // 2**20} MB)')
+print(f'engine: {source} -> {dest} ({os.path.getsize(os.path.join(dest, out_name)) // 2**20} MB)')

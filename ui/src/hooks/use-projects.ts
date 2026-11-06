@@ -49,7 +49,7 @@ export function useProjects(engine: Engine) {
       const path = engine.info.cwd;
       const project = {
         id: crypto.randomUUID(),
-        name: path.split(/[\\/]/).filter(Boolean).pop() || 'Friday',
+        name: path.split(/[\\/]/).filter(Boolean).pop() || 'Liam',
         path,
         prompt: '',
       };

@@ -16,7 +16,7 @@ export async function giteaStatus(): Promise<GiteaStatus> {
 
 /** Opens the browser for Gitea (and the company SSO) and resolves once the tokens are stored. */
 export async function giteaLogin(): Promise<GiteaStatus> {
-  if (!isTauri()) throw new Error('Gitea sign-in works in the Friday desktop app only.');
+  if (!isTauri()) throw new Error('Gitea sign-in works in the Liam desktop app only.');
   return invoke<GiteaStatus>('gitea_login');
 }
 

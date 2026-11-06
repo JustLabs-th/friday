@@ -172,7 +172,7 @@ export function SaveSkillDialog({ draft, projectName, projectPath, onClose, onSc
                 </div>
               </fieldset>
               {!available && (
-                <p className="text-sm text-muted-foreground">เปิด Friday Desktop เพื่อบันทึก skill ลงเครื่อง</p>
+                <p className="text-sm text-muted-foreground">เปิด Liam Desktop เพื่อบันทึก skill ลงเครื่อง</p>
               )}
               {error && (
                 <div role="alert" className="flex flex-col gap-2 text-sm text-destructive">

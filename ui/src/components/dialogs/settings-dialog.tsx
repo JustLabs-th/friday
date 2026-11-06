@@ -73,7 +73,7 @@ const sections: Section[] = [
     icon: Info,
     render: ({ engineLabel, enginePath, onReconnect }) => (
       <>
-        <SettingRow label="Version" description="เวอร์ชันของ Friday UI">
+        <SettingRow label="Version" description="เวอร์ชันของ Liam">
           <span className="text-sm text-muted-foreground">0.1.0</span>
         </SettingRow>
         <SettingRow label="Liam engine" description={enginePath || 'ใช้ login และ configuration ของ Liam ในเครื่อง'}>
@@ -115,7 +115,7 @@ export function SettingsDialog({
       <DialogContent className="h-[min(80vh,640px)] max-w-4xl gap-0 overflow-hidden">
         <div className="border-b px-5 py-4">
           <DialogTitle>Settings</DialogTitle>
-          <DialogDescription className="sr-only">การตั้งค่าของ Friday</DialogDescription>
+          <DialogDescription className="sr-only">การตั้งค่าของ Liam</DialogDescription>
         </div>
         <div className="flex min-h-0 flex-1">
           <nav aria-label="Settings sections" className="flex w-56 shrink-0 flex-col gap-1 border-r p-3">

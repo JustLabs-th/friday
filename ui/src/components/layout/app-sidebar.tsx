@@ -222,7 +222,7 @@ export function AppSidebar({
   }
 
   const gateway = useGatewayStatus();
-  const userName = (gateway.signedIn && (gateway.displayName || gateway.username)) || 'Friday';
+  const userName = (gateway.signedIn && (gateway.displayName || gateway.username)) || 'Liam';
 
   return (
     <Sidebar collapsible="icon" aria-label="Main navigation" className="top-11 h-[calc(100svh-2.75rem)] border-r-0">

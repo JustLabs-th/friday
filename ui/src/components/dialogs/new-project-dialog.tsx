@@ -82,7 +82,7 @@ export function NewProjectDialog({ open: isOpen, onOpenChange, onCreate }: NewPr
                 required
                 value={name}
                 onChange={event => setName(event.target.value)}
-                placeholder="เช่น Friday UI"
+                placeholder="เช่น Liam UI"
               />
             </div>
 

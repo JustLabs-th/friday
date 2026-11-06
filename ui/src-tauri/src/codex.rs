@@ -41,9 +41,10 @@ fn executable() -> PathBuf {
         return path.into();
     }
     let name = if cfg!(windows) { "codex.exe" } else { "codex" };
+    let bundled = if cfg!(windows) { "liam-engine.exe" } else { "liam-engine" };
     // An installed Liam carries its own engine next to the app.
     if let Some(dir) = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf())) {
-        let path = dir.join("engine").join(name);
+        let path = dir.join("engine").join(bundled);
         if path.is_file() {
             return path;
         }

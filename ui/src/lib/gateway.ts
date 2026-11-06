@@ -19,7 +19,7 @@ export async function gatewayStatus(): Promise<GatewayStatus> {
 
 /** Opens the browser for SSO and resolves once the key is stored. Rejects with a readable message. */
 export async function gatewayLogin(): Promise<GatewayStatus> {
-  if (!isTauri()) throw new Error('Sign-in works in the Friday desktop app only.');
+  if (!isTauri()) throw new Error('Sign-in works in the Liam desktop app only.');
   const status = await invoke<GatewayStatus>('gateway_login');
   window.dispatchEvent(new Event(CHANGED));
   return status;

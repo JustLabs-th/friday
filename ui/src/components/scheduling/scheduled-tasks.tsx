@@ -72,7 +72,7 @@ export function ScheduledTasks({ projects, models, onOpenSession, prefill, onPre
           งานรันเมื่อเปิด Friday อยู่ เวลาที่พลาดตอนปิดแอปหรือพักเครื่องจะไม่รันย้อนหลัง งานที่รออนุมัติให้เปิด session
           เพื่ออนุมัติคำสั่งตามปกติ
         </div>
-        {!isTauri() && <p className="text-sm text-muted-foreground">Open Friday Desktop to manage scheduled tasks.</p>}
+        {!isTauri() && <p className="text-sm text-muted-foreground">Open Liam Desktop to manage scheduled tasks.</p>}
         {(error || state.error) && (
           <div role="alert" className="rounded-lg border border-destructive/30 p-4 text-sm text-destructive">
             {error || state.error}
