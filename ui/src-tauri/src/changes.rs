@@ -23,8 +23,6 @@ pub struct Changes {
     added: u32,
     removed: u32,
     files: u32,
-    /// The project's page on the company Git server, when it lives there.
-    repo_url: Option<String>,
 }
 
 fn git(dir: &Path, args: &[&str]) -> Option<String> {
@@ -110,10 +108,6 @@ fn compute(dir: &Path, base: &str) -> Changes {
             changes.added += count_lines(&dir.join(name));
         }
     }
-    changes.repo_url = git(dir, &["remote", "get-url", "origin"]).and_then(|origin| {
-        let origin = origin.trim().trim_end_matches(".git").to_string();
-        origin.starts_with(&format!("{}/", crate::publish::gitea_base())).then_some(origin)
-    });
     changes
 }
 

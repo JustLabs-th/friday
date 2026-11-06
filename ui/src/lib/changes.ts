@@ -6,8 +6,6 @@ export interface Changes {
   added: number;
   removed: number;
   files: number;
-  /** The project's page on the company Git server, when it lives there. */
-  repoUrl?: string | null;
 }
 
 const none: Changes = { added: 0, removed: 0, files: 0 };

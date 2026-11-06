@@ -50,10 +50,6 @@ struct Pull {
     html_url: Option<String>,
 }
 
-pub(crate) fn gitea_base() -> String {
-    base_url()
-}
-
 fn base_url() -> String {
     std::env::var("FRIDAY_GITEA_URL").unwrap_or_else(|_| "https://git.digitalx.srt".into()).trim_end_matches('/').to_string()
 }

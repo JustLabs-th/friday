@@ -1,19 +1,8 @@
 import type { ReactNode } from 'react';
-import {
-  CheckIcon,
-  FileTextIcon,
-  FolderIcon,
-  GitPullRequestIcon,
-  LaptopIcon,
-  TerminalIcon,
-  XIcon,
-  type LucideIcon,
-} from 'lucide-react';
+import { CheckIcon, FileTextIcon, FolderIcon, LaptopIcon, TerminalIcon, XIcon, type LucideIcon } from 'lucide-react';
 import type { SandboxRunData } from '@/components/chat/sandbox-run';
 import type { Project } from '@/components/dialogs/new-project-dialog';
-import { Button } from '@/components/ui/button';
 import { useChanges } from '@/lib/changes';
-import { openLink } from '@/lib/external';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -126,22 +115,10 @@ export function SessionOverview({
       </Section>
 
       <Section title="Changes">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-sm">
-            <span className="text-green-600 dark:text-green-400">+{added}</span>{' '}
-            <span className="text-destructive">−{removed}</span>
-          </span>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!folder.repoUrl}
-            title={folder.repoUrl ? 'งานถูกบันทึกขึ้น Gitea ให้อัตโนมัติหลังตอบเสร็จ' : 'ยังไม่ได้บันทึกขึ้น Gitea'}
-            onClick={() => folder.repoUrl && openLink(folder.repoUrl)}
-          >
-            <GitPullRequestIcon aria-hidden="true" />
-            เปิดใน Gitea
-          </Button>
-        </div>
+        <span className="text-sm">
+          <span className="text-green-600 dark:text-green-400">+{added}</span>{' '}
+          <span className="text-destructive">−{removed}</span>
+        </span>
       </Section>
 
       <Section title="Background tasks">

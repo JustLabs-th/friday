@@ -2,12 +2,6 @@ import type { MouseEvent } from 'react';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
 
-/** Opens an address in the system browser (a button, not a link). */
-export function openLink(url: string) {
-  if (isTauri()) void openUrl(url);
-  else window.open(url, '_blank', 'noopener');
-}
-
 // A desktop webview does not open target="_blank" links, so hand them to the system browser.
 // In a plain browser the link works as usual.
 // A link to a file on this computer (a page the agent just built) opens through Liam, which only opens
