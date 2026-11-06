@@ -12,7 +12,7 @@ import { SaveSkillDialog } from '@/components/dialogs/save-skill-dialog';
 import { SettingsDialog } from '@/components/dialogs/settings-dialog';
 import { Sources } from '@/components/chat/sources';
 import { StackTrace } from '@/components/chat/stack-trace';
-import { RightPanel, type RightPanelTab } from '@/components/panels/right-panel';
+import { RightPanel } from '@/components/panels/right-panel';
 import { TerminalPanel } from '@/components/panels/terminal-panel';
 import {
   AlertDialog,
@@ -67,7 +67,7 @@ export function Gallery() {
   const [projectOpen, setProjectOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [skillOpen, setSkillOpen] = useState(false);
-  const [tab, setTab] = useState<RightPanelTab>('overview');
+  const [preview, setPreview] = useState(false);
   const [request, setRequest] = useState<ConfirmationRequest>({
     id: 'a',
     command: 'pnpm ui:build',
@@ -99,7 +99,7 @@ export function Gallery() {
           <Group title="Prompt input + Model selector" note="Enter ส่ง, Shift+Enter ขึ้นบรรทัดใหม่, ปุ่ม + แนบไฟล์">
             <PromptInput
               onSend={() => undefined}
-              placeholder="พิมพ์ข้อความถึง Codex..."
+              placeholder="พิมพ์ข้อความถึง Liam..."
               controls={
                 <ModelSelector
                   modelId={modelId}
@@ -279,12 +279,11 @@ export function Gallery() {
             />
           </Group>
 
-          <Group title="Right panel" note="แท็บ Overview / Preview">
+          <Group title="Right panel" note="Overview; Preview แทนที่เมื่อเปิด">
             <div className="flex h-[28rem] justify-end overflow-hidden rounded-lg border">
               <RightPanel
-                tab={tab}
-                onTabChange={setTab}
-                onClose={() => undefined}
+                preview={preview}
+                onClose={() => setPreview(false)}
                 project={{ id: 'p', name: 'harness', prompt: '', path: 'E:\\Projects\\harness' }}
                 runs={[
                   { id: '1', title: 'Running pnpm ui:build', state: 'running' },

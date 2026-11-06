@@ -40,7 +40,7 @@ export function TerminalPanel({ onClose, runs = [] }: TerminalPanelProps) {
         <EmptyState
           icon={SquareTerminal}
           title="ยังไม่มีคำสั่งใน session นี้"
-          detail="คำสั่งและผลลัพธ์จาก Codex จะแสดงที่นี่"
+          detail="คำสั่งและผลลัพธ์จาก Liam จะแสดงที่นี่"
         />
       )}
     </section>

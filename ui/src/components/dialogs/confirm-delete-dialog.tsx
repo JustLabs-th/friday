@@ -35,9 +35,9 @@ export function ConfirmDeleteDialog({ target, onCancel, onConfirm }: ConfirmDele
           <AlertDialogTitle>{target?.kind === 'project' ? 'ลบ project?' : 'ลบ session?'}</AlertDialogTitle>
           <AlertDialogDescription>
             {target?.kind === 'project'
-              ? `ลบ "${target.project.name}" ออกจาก Friday โดยไม่ลบไฟล์หรือประวัติใน Codex`
+              ? `ลบ "${target.project.name}" ออกจาก Friday โดยไม่ลบไฟล์หรือประวัติใน Liam`
               : target?.kind === 'session'
-                ? `ลบ session "${target.session.title}" ออกจากรายการ โดยเก็บประวัติไว้ใน Codex`
+                ? `ลบ session "${target.session.title}" ออกจากรายการ โดยเก็บประวัติไว้ใน Liam`
                 : ''}
           </AlertDialogDescription>
         </AlertDialogHeader>

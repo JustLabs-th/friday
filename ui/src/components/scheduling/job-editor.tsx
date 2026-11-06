@@ -94,7 +94,7 @@ export function JobEditor({ job, projects, models, prefill, onClose }: JobEditor
       <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{job ? 'Edit scheduled task' : 'New scheduled task'}</DialogTitle>
-          <DialogDescription>Run a prompt in a project using Codex.</DialogDescription>
+          <DialogDescription>Run a prompt in a project using Liam.</DialogDescription>
         </DialogHeader>
         <form
           className="grid gap-4"
@@ -195,7 +195,7 @@ export function JobEditor({ job, projects, models, prefill, onClose }: JobEditor
                   setForm(current => ({ ...current, model: event.target.value || null, effort: null }))
                 }
               >
-                <option value="">Codex default</option>
+                <option value="">Liam default</option>
                 {form.model && !model && <option value={form.model}>{form.model}</option>}
                 {models.map(item => (
                   <option key={item.id} value={item.id}>

@@ -1,4 +1,4 @@
-//! Durable local scheduling. Reserve and persist a run before contacting Codex.
+//! Durable local scheduling. Reserve and persist a run before contacting Liam.
 use crate::codex::{self, Bridge};
 use chrono::{TimeZone, Utc};
 use chrono_tz::Tz;
@@ -13,7 +13,7 @@ use uuid::Uuid;
 const HISTORY_LIMIT: usize = 200;
 const MAX_ACTIVE: usize = 4;
 
-/// A skill a job runs explicitly: Codex loads it from `path` (its `SKILL.md`) for that turn.
+/// A skill a job runs explicitly: Liam loads it from `path` (its `SKILL.md`) for that turn.
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub struct SkillRef {
     pub name: String,
@@ -569,7 +569,7 @@ async fn receive(app: AppHandle, kind: &str, payload: Value) -> Result<(), Strin
         }
         if kind == "codex-disconnected" && active(&run.status) {
             run.status = "interrupted".into();
-            run.error = Some("Codex disconnected".into());
+            run.error = Some("Liam disconnected".into());
             run.finished_at = Some(Utc::now().timestamp_millis());
             modified = true;
         } else if thread_id.is_some() && run.thread_id.as_deref() == thread_id {

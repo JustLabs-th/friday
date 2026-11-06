@@ -57,7 +57,7 @@ export function ScheduledTasks({ projects, models, onOpenSession, prefill, onPre
             <h1 id="page-title" className="text-2xl font-semibold tracking-tight">
               Scheduled tasks
             </h1>
-            <p className="mt-2 text-sm text-muted-foreground">ตั้งเวลาให้ Codex ทำงานในโปรเจกต์ของคุณ</p>
+            <p className="mt-2 text-sm text-muted-foreground">ตั้งเวลาให้ Liam ทำงานในโปรเจกต์ของคุณ</p>
           </div>
           <Button
             disabled={!isTauri() || !state.ready || !!state.error || !projects.length || pending}

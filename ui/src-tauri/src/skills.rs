@@ -1,4 +1,4 @@
-//! Saves a skill (a folder holding a `SKILL.md`) where Codex looks for skills:
+//! Saves a skill (a folder holding a `SKILL.md`) where Liam looks for skills:
 //! `<project>/.agents/skills/<name>/` for a project, or `~/.agents/skills/<name>/` for the user.
 use serde::{Deserialize, Serialize};
 use std::{fs, path::{Path, PathBuf}};

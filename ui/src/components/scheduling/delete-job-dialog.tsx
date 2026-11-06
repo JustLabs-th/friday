@@ -30,7 +30,7 @@ export function DeleteJobDialog({ job, pending, onCancel, onConfirm }: DeleteJob
         <AlertDialogHeader>
           <AlertDialogTitle>Delete {job?.name}?</AlertDialogTitle>
           <AlertDialogDescription>
-            This removes the schedule and its run history from Friday. Codex sessions and project files are kept.
+            This removes the schedule and its run history from Friday. Liam sessions and project files are kept.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

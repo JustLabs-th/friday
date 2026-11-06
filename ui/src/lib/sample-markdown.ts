@@ -1,8 +1,8 @@
 // Sample replies used to review how Markdown, code, tables and charts render.
-// They did not come from Codex.
+// They did not come from Liam.
 const fence = '`'.repeat(3);
 
-export const sampleReply = `นี่เป็นข้อความตัวอย่างสำหรับดูหน้าตาของคำตอบ ยังไม่ได้มาจาก Codex จริง
+export const sampleReply = `นี่เป็นข้อความตัวอย่างสำหรับดูหน้าตาของคำตอบ ยังไม่ได้มาจาก Liam จริง
 
 ## สรุปผลเปรียบเทียบ
 
