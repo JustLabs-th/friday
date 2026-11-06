@@ -14,6 +14,11 @@ use std::{
 
 static THREADS: Mutex<Option<HashMap<String, PathBuf>>> = Mutex::new(None);
 
+/// Rules every chat gets, whatever the task. They are sent with each thread start and resume.
+pub const RULES: &str = "You work for people who are not developers. Reply in the language they write in, in plain words.
+Finish what you start. Never end your answer with a plan or a promise such as \"I will check ...\", \"next I will ...\" or \"เดี๋ยวผม...\": in the same turn, do the thing by calling the tool, then report the result. End with a short summary of what was done, or say plainly what is left and why.
+To put a project online use the tool Liam-deploy_project. To make a web app or website use the skill liam-nextjs-project and the tool Liam-new_nextjs_project.";
+
 /// Remembers which folder a thread works in, from a `thread/start` or `thread/resume` exchange.
 pub fn remember_thread(params: &Value, result: &Value) {
     let id = result["thread"]["id"].as_str();

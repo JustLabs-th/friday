@@ -325,6 +325,9 @@ pub async fn codex_request(
     method: String,
     mut params: Value,
 ) -> Result<Value, String> {
+    if matches!(method.as_str(), "thread/start" | "thread/resume") && params.get("developerInstructions").is_none() {
+        params["developerInstructions"] = Value::String(crate::platform_tools::RULES.into());
+    }
     if method == "thread/start" {
         let tools = crate::mcp_tools::dynamic_tools().await;
         if !tools.is_empty() {
