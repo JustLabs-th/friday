@@ -111,11 +111,11 @@ fn read_status(app: &AppHandle) -> GatewayStatus {
     GatewayStatus { signed_in: has_key, ..saved }
 }
 
-/// Where this person's sessions, settings and cache live: one folder per signed-in user, so a PC shared
+/// Where this person's sessions, settings and cache live (`~/.liam`): one folder per signed-in user, so a PC shared
 /// by several people (or one person signing in as someone else) never shows another user's history.
 /// Never the user's own `~/.codex`: that belongs to whatever Codex they use themselves, and Liam must
-/// neither read nor write it. Before anyone has signed in (or without a usable name) a shared Liam
-/// folder is used instead.
+/// neither read nor write it. Before anyone has signed in (or without a usable name) a shared
+/// `~/.liam/default` folder is used instead.
 pub fn user_home(app: &AppHandle) -> Option<PathBuf> {
     let status = read_status(app);
     let name: String = status
@@ -126,11 +126,13 @@ pub fn user_home(app: &AppHandle) -> Option<PathBuf> {
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') { c } else { '_' })
         .collect();
-    let root = app.path().app_data_dir().ok()?;
+    // Under the home folder like other tools (`~/.codex`), so it is easy to find, back up or sync, and
+    // does not depend on the app's identifier the way the app-data folder does.
+    let root = app.path().home_dir().ok()?.join(".liam");
     let dir = if name.is_empty() || name.chars().all(|c| c == '.') {
-        root.join("engine")
+        root.join("default")
     } else {
-        root.join("users").join(name).join("engine")
+        root.join("users").join(name)
     };
     std::fs::create_dir_all(&dir).ok()?;
     Some(dir)
