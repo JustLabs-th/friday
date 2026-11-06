@@ -9,7 +9,7 @@ use std::{
         Arc,
     },
 };
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     process::{Child, ChildStdin, Command},
@@ -41,11 +41,21 @@ fn executable() -> PathBuf {
         return path.into();
     }
     let name = if cfg!(windows) { "codex.exe" } else { "codex" };
-    let target = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../codex-rs/target");
-    for profile in ["debug", "release"] {
-        let path = target.join(profile).join(name);
+    // An installed Liam carries its own engine next to the app.
+    if let Some(dir) = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf())) {
+        let path = dir.join("engine").join(name);
         if path.is_file() {
             return path;
+        }
+    }
+    // Development builds can use the engine built from the source checkout.
+    if cfg!(debug_assertions) {
+        let target = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../codex-rs/target");
+        for profile in ["debug", "release"] {
+            let path = target.join(profile).join(name);
+            if path.is_file() {
+                return path;
+            }
         }
     }
     #[cfg(windows)]
@@ -119,11 +129,22 @@ pub async fn codex_connect(app: AppHandle, bridge: State<'_, Bridge>) -> Result<
     }
     disconnect(&bridge).await;
     let binary = executable();
-    // Keep the source checkout as the default project even when launched elsewhere.
-    let cwd = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .map_err(|e| e.to_string())?;
+    // Development keeps the source checkout as the default project; an installed Liam uses a folder
+    // in the user's Documents so it never depends on where it was built.
+    let cwd = if cfg!(debug_assertions) {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .canonicalize()
+            .map_err(|e| e.to_string())?
+    } else {
+        let dir = app
+            .path()
+            .document_dir()
+            .map_err(|e| e.to_string())?
+            .join("Liam");
+        std::fs::create_dir_all(&dir).map_err(|e| format!("Cannot create {}: {e}", dir.display()))?;
+        dir
+    };
     let cwd_text = cwd
         .to_string_lossy()
         .trim_start_matches("\\\\?\\")
