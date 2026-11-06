@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod codex;
+mod files;
 mod gateway_auth;
 mod gitea_auth;
 mod mcp_tools;
@@ -32,6 +33,7 @@ fn main() {
             scheduler::scheduler_run,
             scheduler::scheduler_stop,
             skills::skill_save,
+            files::open_local_file,
             trust::trust_status,
             trust::trust_install,
             gateway_auth::gateway_status,
