@@ -4,6 +4,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { Message } from '@/components/chat/chat-view';
 import type { ConfirmationRequest } from '@/components/chat/confirmation';
 import type { PlanData } from '@/components/chat/plan';
+import { derivePlan } from '@/lib/work-plan';
 import type { ModelInfo, Effort } from '@/lib/models';
 
 export interface EngineInfo { connectionId: number; binary: string; cwd: string; server: { userAgent?: string } }
@@ -98,7 +99,8 @@ function renderTurns(turns: Turn[]): Message[] {
       id: `turn:${turn.id}`, role: 'assistant', files: [],
       text: turn.items.filter(item => item.type === 'agentMessage').map(item => item.text || '').filter(Boolean).join('\n\n'),
       reasoning: reasoning.length ? { text: reasoning.flatMap(item => item.summary || []).join('\n\n'), running: isActive(turn.status) && !turn.items.some(item => item.type === 'agentMessage') } : undefined,
-      plan: turn.plan,
+      // The model's own plan when it made one; otherwise one built from what it actually did.
+      plan: turn.plan || derivePlan(turn.items, (users[users.length - 1]?.text || ''), isActive(turn.status)),
       publish: turn.publish,
       running: isActive(turn.status) || undefined,
       runs: runs.length ? runs : undefined,

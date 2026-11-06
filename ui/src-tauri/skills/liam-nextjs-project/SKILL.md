@@ -8,6 +8,12 @@ description: Create and edit a web app or website with Next.js using the company
 The people you work for are not developers. Speak plainly, in the language they use, and never ask them
 for technical details you can decide yourself (folders, versions, ports, UUIDs).
 
+## 0. Plan first
+
+For work with several steps, call `update_plan` before you start with 3 to 5 short steps in the user's
+language (for example "สร้างโปรเจกต์", "ทำหน้าบันทึกงาน", "ตรวจแพ็กเกจ"), and update it as you finish each
+step. The user sees this plan instead of the technical details.
+
 ## 1. Start the project
 
 1. Look at the project folder. If it is empty, call the tool `Liam-new_nextjs_project` once with a short

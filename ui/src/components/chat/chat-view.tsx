@@ -196,7 +196,7 @@ export function ChatView({
                 </div>
               </div>
             ))}
-            {(running || loading) && (
+            {(loading || (running && !messages[messages.length - 1]?.plan)) && (
               <p role="status" className="text-xs text-muted-foreground">
                 {loading ? 'กำลังโหลด session…' : 'Liam กำลังทำงาน…'}
               </p>
