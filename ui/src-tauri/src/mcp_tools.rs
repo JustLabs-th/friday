@@ -8,28 +8,27 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 
 const ENDPOINT: &str = "https://bifrost.digitalx.srt/mcp";
-/// The gateway filters tools by exact MCP client name.
-const CLIENT: &str = "Coolify";
-/// Enough to deploy and look after an app, small enough for the model's context window.
-const TOOLS: &[&str] = &[
-    "get_infrastructure_overview",
-    "list_servers",
-    "list_projects",
-    "get_project",
-    "list_resources",
-    "list_applications",
-    "get_application",
-    "list_unhealthy_resources",
-    "list_deployments",
-    "get_deployment",
-    "get_logs",
-    "list_env_keys",
-    "create_application",
-    "manage_application",
-    "manage_env",
-    "deploy",
-    "cancel_deployment",
-    "rollback_application",
+/// MCP clients (exact names, the gateway filters by them) and the few tools of each worth giving the
+/// agent: enough to run the job, small enough for the model's context window.
+const CLIENTS: &[(&str, &[&str])] = &[
+    (
+        "Coolify",
+        &[
+            "get_infrastructure_overview", "list_servers", "list_projects", "get_project",
+            "list_resources", "list_applications", "get_application", "list_unhealthy_resources",
+            "list_deployments", "get_deployment", "get_logs", "list_env_keys",
+            "create_application", "manage_application", "manage_env", "deploy",
+            "cancel_deployment", "rollback_application",
+        ],
+    ),
+    (
+        // The dashboard: list, add and edit the app tiles users open. Nothing destructive.
+        "Homarr",
+        &[
+            "app_all", "app_search", "app_byId", "app_create", "app_update", "icon_findIcons",
+            "icon_detectFavicon", "board_getAllBoards", "board_search", "integration_all",
+        ],
+    ),
 ];
 
 static CACHE: Mutex<Option<Vec<Value>>> = Mutex::const_new(None);
@@ -45,6 +44,7 @@ fn http() -> Result<reqwest::Client, String> {
 async fn rpc(
     http: &reqwest::Client,
     key: &str,
+    client: &str,
     session: Option<&str>,
     body: Value,
 ) -> Result<(Option<String>, Value), String> {
@@ -53,7 +53,7 @@ async fn rpc(
         .bearer_auth(key)
         .header("Accept", "application/json, text/event-stream")
         .header("Content-Type", "application/json")
-        .header("x-bf-mcp-include-clients", CLIENT);
+        .header("x-bf-mcp-include-clients", client);
     if let Some(session) = session {
         request = request.header("Mcp-Session-Id", session);
     }
@@ -89,10 +89,11 @@ async fn rpc(
     Ok((session, value["result"].clone()))
 }
 
-async fn open(http: &reqwest::Client, key: &str) -> Result<Option<String>, String> {
+async fn open(http: &reqwest::Client, key: &str, client: &str) -> Result<Option<String>, String> {
     let (session, _) = rpc(
         http,
         key,
+        client,
         None,
         json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
             "protocolVersion": "2025-03-26",
@@ -104,6 +105,7 @@ async fn open(http: &reqwest::Client, key: &str) -> Result<Option<String>, Strin
     rpc(
         http,
         key,
+        client,
         session.as_deref(),
         json!({"jsonrpc": "2.0", "method": "notifications/initialized"}),
     )
@@ -120,26 +122,27 @@ pub async fn dynamic_tools() -> Vec<Value> {
     if let Some(cached) = CACHE.lock().await.as_ref() {
         return cached.clone();
     }
-    let tools = async {
-        let http = http()?;
-        let session = open(&http, &key).await?;
-        let (_, result) = rpc(
-            &http,
-            &key,
-            session.as_deref(),
-            json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}),
-        )
-        .await?;
-        Ok::<_, String>(result["tools"].as_array().cloned().unwrap_or_default())
-    }
-    .await
-    .unwrap_or_default();
-    let specs: Vec<Value> = tools
-        .into_iter()
-        .filter_map(|tool| {
+    let mut specs: Vec<Value> = Vec::new();
+    for (client, allowed) in CLIENTS {
+        let tools = async {
+            let http = http()?;
+            let session = open(&http, &key, client).await?;
+            let (_, result) = rpc(
+                &http,
+                &key,
+                client,
+                session.as_deref(),
+                json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}),
+            )
+            .await?;
+            Ok::<_, String>(result["tools"].as_array().cloned().unwrap_or_default())
+        }
+        .await
+        .unwrap_or_default();
+        specs.extend(tools.into_iter().filter_map(|tool| {
             let name = tool["name"].as_str()?;
-            let short = name.strip_prefix(&format!("{CLIENT}-"))?;
-            if !TOOLS.contains(&short) {
+            let short = name.strip_prefix(&format!("{client}-"))?;
+            if !allowed.contains(&short) {
                 return None;
             }
             Some(json!({
@@ -149,8 +152,8 @@ pub async fn dynamic_tools() -> Vec<Value> {
                 "inputSchema": tool.get("inputSchema").cloned()
                     .unwrap_or_else(|| json!({"type": "object", "properties": {}})),
             }))
-        })
-        .collect();
+        }));
+    }
     // Only remember a real answer, so a gateway hiccup is retried on the next thread.
     if !specs.is_empty() {
         *CACHE.lock().await = Some(specs.clone());
@@ -163,15 +166,19 @@ pub async fn call(name: &str, arguments: Value) -> (String, bool) {
     let Some(key) = crate::gateway_auth::stored_key() else {
         return ("Not signed in to the company gateway.".into(), false);
     };
-    if !name.starts_with(&format!("{CLIENT}-")) {
+    let Some((client, _)) = CLIENTS
+        .iter()
+        .find(|(client, _)| name.starts_with(&format!("{client}-")))
+    else {
         return (format!("Unknown tool: {name}"), false);
-    }
+    };
     let outcome = async {
         let http = http()?;
-        let session = open(&http, &key).await?;
+        let session = open(&http, &key, client).await?;
         rpc(
             &http,
             &key,
+            client,
             session.as_deref(),
             json!({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
                    "params": {"name": name, "arguments": arguments}}),
