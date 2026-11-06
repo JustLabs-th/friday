@@ -69,7 +69,7 @@ async fn git(cwd: &Path, auth: &Auth, identity: &[String], args: &[&str]) -> Res
         .args(args)
         .current_dir(cwd)
         .env("GIT_TERMINAL_PROMPT", "0")
-        .env("GIT_CONFIG_COUNT", "3")
+        .env("GIT_CONFIG_COUNT", if crate::trust::ca_file().is_some() { "5" } else { "3" })
         .env("GIT_CONFIG_KEY_0", "http.extraHeader")
         .env("GIT_CONFIG_VALUE_0", header)
         .env("GIT_CONFIG_KEY_1", "credential.helper")
@@ -77,6 +77,14 @@ async fn git(cwd: &Path, auth: &Auth, identity: &[String], args: &[&str]) -> Res
         .env("GIT_CONFIG_KEY_2", "http.sslBackend")
         .env("GIT_CONFIG_VALUE_2", "schannel")
         .kill_on_drop(true);
+    // Trust the company CA from the file shipped with Liam (the Windows store is not touched).
+    if let Some(ca) = crate::trust::ca_file() {
+        command
+            .env("GIT_CONFIG_KEY_3", "http.sslCAInfo")
+            .env("GIT_CONFIG_VALUE_3", ca)
+            .env("GIT_CONFIG_KEY_4", "http.schannelUseSSLCAInfo")
+            .env("GIT_CONFIG_VALUE_4", "true");
+    }
     #[cfg(windows)]
     command.creation_flags(0x08000000);
     let output = tokio::time::timeout(Duration::from_secs(120), command.output())
@@ -154,7 +162,7 @@ pub async fn publish_changes(app: AppHandle, cwd: String, summary: String) -> Re
     let Some(token) = gitea_auth::access_token(&app).await else {
         return done("skipped", "ยังไม่ได้เชื่อมต่อ Gitea จึงยังไม่ได้บันทึกงานขึ้น Git server", None);
     };
-    let http = reqwest::Client::builder()
+    let http = crate::trust::http_builder()
         .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(30))
         .build()

@@ -151,7 +151,7 @@ fn store_tokens(tokens: &Tokens) -> Result<(), String> {
 }
 
 fn client() -> Result<reqwest::Client, String> {
-    reqwest::Client::builder()
+    crate::trust::http_builder()
         .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(20))
         .build()

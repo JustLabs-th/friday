@@ -160,6 +160,11 @@ pub async fn codex_connect(app: AppHandle, bridge: State<'_, Bridge>) -> Result<
     command
         .env("npm_config_registry", crate::NEXUS_NPM)
         .env("PIP_INDEX_URL", crate::NEXUS_PIP);
+    // The company root CA ships with Liam: the engine and the tools the agent runs trust it from the
+    // file, so nothing is written to the Windows certificate store.
+    for (name, value) in crate::trust::tool_env() {
+        command.env(name, value);
+    }
     command
         .args(["app-server", "--listen", "stdio://"])
         .current_dir(&cwd)

@@ -34,7 +34,7 @@ const CLIENTS: &[(&str, &[&str])] = &[
 static CACHE: Mutex<Option<Vec<Value>>> = Mutex::const_new(None);
 
 fn http() -> Result<reqwest::Client, String> {
-    reqwest::Client::builder()
+    crate::trust::http_builder()
         .timeout(Duration::from_secs(120))
         .build()
         .map_err(|e| e.to_string())

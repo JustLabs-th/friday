@@ -1,16 +1,15 @@
-; Extra steps for the Liam installer: trust the company CA and set the company host names.
-; The installer runs per machine (administrator), which both steps need. The work is done by
-; liam-setup.exe (a plain program) because endpoint protection on company PCs blocks PowerShell.
+; Extra step for the Liam installer: set the company host names (needs administrator, which the
+; installer already has). Liam trusts the company CA inside the app, so no certificate is installed.
+; The work is done by liam-setup.exe (a plain program) because endpoint protection on company PCs
+; blocks PowerShell. A PC whose DNS already resolves the company names does not need this, so a
+; failure is noted in the install log but does not interrupt the installation.
 
 !macro NSIS_HOOK_POSTINSTALL
-  DetailPrint "Setting up the company network (certificate and host names)..."
+  DetailPrint "Setting up the company host names..."
   nsExec::ExecToStack '"$INSTDIR\installer\liam-setup.exe" install'
   Pop $0
   Pop $1
-  DetailPrint "Company network setup exit code: $0 $1"
-  ${If} $0 != 0
-    MessageBox MB_OK|MB_ICONEXCLAMATION "Liam was installed, but the company network setup did not finish (code $0). Liam will not reach company services until it is fixed.$\r$\n$\r$\n$1$\r$\n$\r$\nLog: $INSTDIR\installer\network-setup.log"
-  ${EndIf}
+  DetailPrint "Company host names: exit code $0 $1"
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL

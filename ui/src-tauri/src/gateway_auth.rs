@@ -218,7 +218,7 @@ pub async fn gateway_login(app: AppHandle) -> Result<GatewayStatus, String> {
         .await
         .map_err(|_| "Sign-in timed out. Try again.".to_string())??;
 
-    let http = reqwest::Client::builder()
+    let http = crate::trust::http_builder()
         .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(20))
         .build()

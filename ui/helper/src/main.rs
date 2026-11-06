@@ -1,12 +1,13 @@
-//! Run by the Liam installer (as administrator): trust the company root CA and point the company
-//! service names at their servers. It is a plain program rather than a script because endpoint
-//! protection on company PCs blocks PowerShell.
+//! Run by the Liam installer (as administrator): point the company service names at their servers.
+//! It is a plain program rather than a script because endpoint protection on company PCs blocks
+//! PowerShell. Liam trusts the company root CA inside the app, so the Windows certificate store is
+//! only touched when asked (`--with-ca`, for browsers on that PC).
 //!
-//!   liam-setup install   [--ca <file>] [--hosts <file>] [--hosts-only]
+//!   liam-setup install   [--hosts <file>] [--with-ca [--ca <file>]]
 //!   liam-setup uninstall [--hosts <file>]
 //!
-//! Safe to run again. `uninstall` removes only the hosts block; the CA stays because other company
-//! tools rely on it. A log is written next to this program.
+//! Safe to run again. `uninstall` removes only the hosts block; a CA that was added stays because
+//! other company tools rely on it. A log is written next to this program.
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -124,12 +125,12 @@ fn main() {
             .join(r"System32\drivers\etc\hosts")
     });
     let ca = value("--ca").map(PathBuf::from).unwrap_or_else(|| exe_dir.join("srt-platform-root-ca.crt"));
-    let hosts_only = args.iter().any(|a| a == "--hosts-only");
+    let with_ca = args.iter().any(|a| a == "--with-ca");
 
     let result = (|| -> Result<(), String> {
         match action {
             "install" => {
-                if !hosts_only {
+                if with_ca {
                     if !ca.is_file() {
                         return Err(format!("root CA not found: {}", ca.display()));
                     }
@@ -145,7 +146,7 @@ fn main() {
             }
             other => return Err(format!("unknown action: {other}")),
         }
-        if !hosts_only {
+        {
             let _ = run("ipconfig.exe", &["/flushdns"]);
         }
         Ok(())

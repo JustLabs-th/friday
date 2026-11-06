@@ -7,6 +7,7 @@ mod mcp_tools;
 mod publish;
 mod scheduler;
 mod skills;
+mod trust;
 
 /// The company package registry (Nexus).
 pub const NEXUS_NPM: &str = "https://nexus.digitalx.srt/repository/npm-group/";
