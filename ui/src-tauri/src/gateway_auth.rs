@@ -111,6 +111,28 @@ fn read_status(app: &AppHandle) -> GatewayStatus {
     GatewayStatus { signed_in: has_key, ..saved }
 }
 
+/// Where this person's sessions, settings and cache live: one folder per signed-in user, so a PC shared
+/// by several people (or one person signing in as someone else) never shows another user's history.
+/// `None` when nobody is signed in or the name is unusable, so Liam falls back to its usual folder.
+pub fn user_home(app: &AppHandle) -> Option<PathBuf> {
+    let status = read_status(app);
+    if !status.signed_in {
+        return None;
+    }
+    let name: String = status
+        .username?
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') { c } else { '_' })
+        .collect();
+    if name.is_empty() || name.chars().all(|c| c == '.') {
+        return None;
+    }
+    let dir = app.path().app_data_dir().ok()?.join("users").join(name).join("engine");
+    std::fs::create_dir_all(&dir).ok()?;
+    Some(dir)
+}
+
 #[tauri::command]
 pub fn gateway_status(app: AppHandle) -> GatewayStatus {
     read_status(&app)
