@@ -26,6 +26,11 @@ pub fn remember_thread(params: &Value, result: &Value) {
     }
 }
 
+/// The folder a chat works in, when Liam has seen it start.
+pub fn thread_dir(thread_id: &str) -> Option<PathBuf> {
+    project_dir(thread_id).ok()
+}
+
 fn project_dir(thread_id: &str) -> Result<PathBuf, String> {
     THREADS
         .lock()

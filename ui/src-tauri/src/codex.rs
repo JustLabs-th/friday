@@ -359,6 +359,12 @@ pub async fn codex_request(
     ) {
         return Err(format!("Unsupported Liam method: {method}"));
     }
+    if method == "turn/start" {
+        // How the folder looks before this chat's first request, so the side panel can show what changed.
+        if let Some(dir) = params["threadId"].as_str().and_then(crate::platform_tools::thread_dir) {
+            crate::changes::note_baseline(params["threadId"].as_str().unwrap_or(""), &dir);
+        }
+    }
     let result = request(&bridge, &method, params.clone()).await?;
     if matches!(method.as_str(), "thread/start" | "thread/resume") {
         crate::platform_tools::remember_thread(&params, &result);

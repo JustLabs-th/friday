@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod changes;
 mod codex;
 mod coolify_forms;
 mod files;
@@ -36,6 +37,7 @@ fn main() {
             scheduler::scheduler_stop,
             skills::skill_save,
             files::open_local_file,
+            changes::git_changes,
             trust::trust_status,
             trust::trust_install,
             gateway_auth::gateway_status,

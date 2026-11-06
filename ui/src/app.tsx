@@ -297,12 +297,12 @@ export function App() {
                   onClose={panels.closeRightPanel}
                   project={activeProject}
                   runs={activeRuns}
+                  threadId={activeSessionId}
+                  running={sessionRunning}
                 />
               )}
             </div>
-            {!sidePage && panels.terminalOpen && (
-              <TerminalPanel runs={activeRuns} onClose={panels.closeTerminal} />
-            )}
+            {!sidePage && panels.terminalOpen && <TerminalPanel runs={activeRuns} onClose={panels.closeTerminal} />}
           </SidebarInset>
         </div>
 

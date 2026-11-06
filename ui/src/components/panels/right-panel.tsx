@@ -12,10 +12,13 @@ interface RightPanelProps {
   onClose: () => void;
   project: Project | null;
   runs: SandboxRunData[];
+  /** The open chat, so the overview can show what it changed. */
+  threadId?: string | null;
+  running?: boolean;
 }
 
 /** The side of the chat: the session overview, replaced by the preview while one is open. */
-export function RightPanel({ preview, onClose, project, runs }: RightPanelProps) {
+export function RightPanel({ preview, onClose, project, runs, threadId, running }: RightPanelProps) {
   return (
     <aside
       aria-label={preview ? 'Preview' : 'Session overview'}
@@ -30,7 +33,11 @@ export function RightPanel({ preview, onClose, project, runs }: RightPanelProps)
         </div>
       )}
       <div className="min-h-0 flex-1">
-        {preview ? <PreviewPanel /> : <SessionOverview project={project} runs={runs} />}
+        {preview ? (
+          <PreviewPanel />
+        ) : (
+          <SessionOverview project={project} runs={runs} threadId={threadId} running={running} />
+        )}
       </div>
     </aside>
   );

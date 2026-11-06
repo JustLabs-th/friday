@@ -12,6 +12,8 @@ import {
 import type { SandboxRunData } from '@/components/chat/sandbox-run';
 import type { Project } from '@/components/dialogs/new-project-dialog';
 import { Button } from '@/components/ui/button';
+import { useChanges } from '@/lib/changes';
+import { openLink } from '@/lib/external';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -57,13 +59,26 @@ function countChanges(files: NonNullable<SandboxRunData['files']>) {
 
 interface SessionOverviewProps {
   project: Project | null;
+  /** The open chat and whether it is working, to read what it changed in the project folder. */
+  threadId?: string | null;
+  running?: boolean;
   /** Commands the active session has run, shown as background tasks. */
   runs: SandboxRunData[];
 }
 
-export function SessionOverview({ project, runs }: SessionOverviewProps) {
+export function SessionOverview({
+  project,
+  runs,
+  threadId = null,
+  running: chatRunning = false,
+}: SessionOverviewProps) {
   const files = runs.flatMap(run => run.files || []);
-  const { added, removed } = countChanges(files);
+  // Counted from the project folder itself: the agent writes files through the shell, so there are no
+  // edit records to add up. Falls back to the edits the chat reported (browser preview).
+  const folder = useChanges(threadId, chatRunning);
+  const reported = countChanges(files);
+  const added = folder.files ? folder.added : reported.added;
+  const removed = folder.files ? folder.removed : reported.removed;
   const running = runs.filter(run => run.state === 'running');
   const finished = runs.length - running.length;
 
@@ -116,9 +131,15 @@ export function SessionOverview({ project, runs }: SessionOverviewProps) {
             <span className="text-green-600 dark:text-green-400">+{added}</span>{' '}
             <span className="text-destructive">−{removed}</span>
           </span>
-          <Button size="sm" variant="outline" disabled title="ยังไม่มีการเปลี่ยนแปลงให้สร้าง PR">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!folder.repoUrl}
+            title={folder.repoUrl ? 'งานถูกบันทึกขึ้น Gitea ให้อัตโนมัติหลังตอบเสร็จ' : 'ยังไม่ได้บันทึกขึ้น Gitea'}
+            onClick={() => folder.repoUrl && openLink(folder.repoUrl)}
+          >
             <GitPullRequestIcon aria-hidden="true" />
-            Create PR
+            เปิดใน Gitea
           </Button>
         </div>
       </Section>
