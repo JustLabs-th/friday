@@ -159,14 +159,17 @@ export function ChatView({
                     {message.errors?.map((stack, index) => (
                       <StackTrace key={index} stack={stack} defaultOpen />
                     ))}
-                    {message.confirmations?.map(request => (
-                      <Confirmation
-                        key={request.id}
-                        request={request}
-                        onApprove={() => onResolveConfirmation(message.id, request.id, true)}
-                        onDeny={() => onResolveConfirmation(message.id, request.id, false)}
-                      />
-                    ))}
+                    {/* Only a request waiting for an answer belongs in the conversation; once answered it is just noise. */}
+                    {message.confirmations
+                      ?.filter(request => request.state === 'requested')
+                      .map(request => (
+                        <Confirmation
+                          key={request.id}
+                          request={request}
+                          onApprove={() => onResolveConfirmation(message.id, request.id, true)}
+                          onDeny={() => onResolveConfirmation(message.id, request.id, false)}
+                        />
+                      ))}
                     {message.files.length > 0 && (
                       <div className="mb-2 flex flex-wrap gap-1.5">
                         {message.files.map((name, index) => (
