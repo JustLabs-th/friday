@@ -115,8 +115,15 @@ async fn open(http: &reqwest::Client, key: &str, client: &str) -> Result<Option<
     Ok(session)
 }
 
-/// The tools to hand to Codex when a thread starts. Empty when signed out or the gateway has no access.
+/// The tools to hand to Codex when a thread starts: the company gateway's (when signed in and granted)
+/// and Liam's own.
 pub async fn dynamic_tools() -> Vec<Value> {
+    let mut tools = gateway_tools().await;
+    tools.extend(crate::platform_tools::specs());
+    tools
+}
+
+async fn gateway_tools() -> Vec<Value> {
     let Some(key) = crate::gateway_auth::stored_key() else {
         return Vec::new();
     };
@@ -171,7 +178,10 @@ pub async fn dynamic_tools() -> Vec<Value> {
 }
 
 /// Runs one tool and returns (text for the model, whether it worked).
-pub async fn call(name: &str, arguments: Value) -> (String, bool) {
+pub async fn call(name: &str, arguments: Value, thread_id: &str) -> (String, bool) {
+    if let Some(result) = crate::platform_tools::call(name, &arguments, thread_id).await {
+        return result;
+    }
     let (name, arguments) = match crate::coolify_forms::translate(name, &arguments) {
         Some(Ok(real)) => real,
         Some(Err(message)) => return (message, false),

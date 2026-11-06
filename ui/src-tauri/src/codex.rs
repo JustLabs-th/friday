@@ -157,6 +157,7 @@ pub async fn codex_connect(app: AppHandle, bridge: State<'_, Bridge>) -> Result<
     }
     // Liam's own engine folder, never the user's ~/.codex (their personal Codex sessions stay untouched).
     let home = crate::gateway_auth::user_home(&app).ok_or("Cannot create Liam's data folder")?;
+    crate::platform_tools::install_skills(&home);
     command.env("CODEX_HOME", home);
     // Packages come from the company Nexus (curated), not the internet. These are read by npm,
     // pnpm, yarn and pip, so whatever the agent installs in a project goes through it.
@@ -222,9 +223,10 @@ pub async fn codex_connect(app: AppHandle, bridge: State<'_, Bridge>) -> Result<
                         let id = id.clone();
                         let stdin = reader_stdin.clone();
                         let tool = message["params"]["tool"].as_str().unwrap_or("").to_owned();
+                        let thread_id = message["params"]["threadId"].as_str().unwrap_or("").to_owned();
                         let arguments = message["params"]["arguments"].clone();
                         tauri::async_runtime::spawn(async move {
-                            let (mut text, success) = crate::mcp_tools::call(&tool, arguments).await;
+                            let (mut text, success) = crate::mcp_tools::call(&tool, arguments, &thread_id).await;
                             // Keep a runaway answer from filling the model's small context window.
                             if text.chars().count() > 12_000 {
                                 text = text.chars().take(12_000).collect::<String>() + "\n…(truncated)";
@@ -356,7 +358,11 @@ pub async fn codex_request(
     ) {
         return Err(format!("Unsupported Liam method: {method}"));
     }
-    request(&bridge, &method, params).await
+    let result = request(&bridge, &method, params.clone()).await?;
+    if matches!(method.as_str(), "thread/start" | "thread/resume") {
+        crate::platform_tools::remember_thread(&params, &result);
+    }
+    Ok(result)
 }
 
 #[tauri::command]

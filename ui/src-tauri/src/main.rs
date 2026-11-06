@@ -6,6 +6,7 @@ mod files;
 mod gateway_auth;
 mod gitea_auth;
 mod mcp_tools;
+mod platform_tools;
 mod publish;
 mod scheduler;
 mod skills;
