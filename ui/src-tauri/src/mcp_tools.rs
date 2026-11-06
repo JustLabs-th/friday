@@ -182,6 +182,12 @@ pub async fn call(name: &str, arguments: Value, thread_id: &str) -> (String, boo
     if let Some(result) = crate::platform_tools::call(name, &arguments, thread_id).await {
         return result;
     }
+    gateway_call(name, arguments).await
+}
+
+/// A call to the company gateway only (Liam's own tools are not considered), for Liam's own code that
+/// builds on the gateway, such as deploying a project.
+pub async fn gateway_call(name: &str, arguments: Value) -> (String, bool) {
     let (name, arguments) = match crate::coolify_forms::translate(name, &arguments) {
         Some(Ok(real)) => real,
         Some(Err(message)) => return (message, false),

@@ -53,9 +53,13 @@ step. The user sees this plan instead of the technical details.
   most computers do not have the right Node version. The platform builds the app for you from the
   `Dockerfile` that is already in the project. Do not edit the `Dockerfile` base images; they come from
   the company registry (`registry.digitalx.srt`), not Docker Hub.
-- Deploying a project (putting it online) is a separate step handled by the deploy tools. Do not use
-  `Coolify-deploy_from_dockerfile` for a project that has source files: it only uploads the Dockerfile
-  and not your code.
+- To put the project online, call `Liam-deploy_project` (only when the user asks to deploy, publish or
+  share it). It saves the work, creates the application, gives it an address and adds it to the
+  dashboard. Call it again after later changes to publish the newest version. Tell the user the address
+  it returns. The first build can take a few minutes; if the status is not "running" yet, say that it is
+  still being built and offer to check again.
+- Do not use the `Coolify-deploy_from_*` tools for a project that has source files: they do not carry
+  your code. Use `Liam-deploy_project`.
 
 ## 5. When you are done
 

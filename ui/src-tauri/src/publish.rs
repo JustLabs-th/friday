@@ -122,7 +122,7 @@ async fn api<T: for<'de> Deserialize<'de>>(
     serde_json::from_str(&text).map_err(|e| (status, e.to_string()))
 }
 
-fn slug(name: &str) -> String {
+pub(crate) fn slug(name: &str) -> String {
     let mut out = String::new();
     for c in name.to_lowercase().chars() {
         if c.is_ascii_alphanumeric() {
@@ -136,10 +136,26 @@ fn slug(name: &str) -> String {
 }
 
 /// `owner/repo` of the `origin` remote when it lives on the company Gitea.
-fn gitea_repo(origin: &str) -> Option<String> {
+pub(crate) fn gitea_repo(origin: &str) -> Option<String> {
     let rest = origin.strip_prefix(&format!("{}/", base_url()))?;
     let path = rest.trim_end_matches('/').trim_end_matches(".git");
     if path.split('/').count() == 2 { Some(path.to_string()) } else { None }
+}
+
+/// Lets Coolify read the repository: adds a read-only deploy key to it on the Git server.
+pub(crate) async fn add_deploy_key(token: &str, repo: &str, title: &str, key: &str) -> Result<(), String> {
+    let http = crate::trust::http_builder().timeout(Duration::from_secs(30)).build().map_err(|e| e.to_string())?;
+    let auth = Auth { login: String::new(), token: token.to_string() };
+    api::<serde_json::Value>(
+        &http,
+        &auth,
+        reqwest::Method::POST,
+        &format!("/repos/{repo}/keys"),
+        Some(serde_json::json!({"title": title, "key": key, "read_only": true})),
+    )
+    .await
+    .map(|_| ())
+    .map_err(|(status, body)| format!("Could not add the deploy key to the repository ({status}): {}", body.chars().take(200).collect::<String>()))
 }
 
 fn first_line(text: &str) -> String {

@@ -121,6 +121,8 @@ body {
   font-family: system-ui, "Noto Sans Thai", sans-serif;
 }
 ''',
+    'app/icon.svg': '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#171717"/><path d="M20 22h24M20 32h24M20 42h14" stroke="#fafafa" stroke-width="5" stroke-linecap="round"/></svg>
+''',
     'next.config.ts': '''import type { NextConfig } from "next";
 
 const config: NextConfig = {

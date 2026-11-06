@@ -47,6 +47,11 @@ pub fn specs() -> Vec<Value> {
             "inputSchema": {"type": "object", "properties": {
                 "name": {"type": "string", "description": "Short project name: lowercase letters, digits and hyphens, e.g. work-log."}
             }, "required": ["name"]}}),
+        json!({"type": "function", "name": "Liam-deploy_project",
+            "description": "Put the current project online: deploys it on the company platform, gives it an address and adds it to the dashboard. Run again after changes to publish the newest version. Needs a project created with Liam-new_nextjs_project.",
+            "inputSchema": {"type": "object", "properties": {
+                "name": {"type": "string", "description": "Optional short name for the address (lowercase letters, digits, hyphens). Default: the project name."}
+            }}}),
         json!({"type": "function", "name": "Liam-check_packages",
             "description": "Check the current project's packages against the company-approved list and Nexus. Call it before adding a package and again before finishing.",
             "inputSchema": {"type": "object", "properties": {}}}),
@@ -58,6 +63,10 @@ pub async fn call(name: &str, arguments: &Value, thread_id: &str) -> Option<(Str
     let outcome = match name {
         "Liam-new_nextjs_project" => new_nextjs_project(arguments, thread_id),
         "Liam-check_packages" => check_packages(thread_id).await,
+        "Liam-deploy_project" => match project_dir(thread_id) {
+            Ok(dir) => crate::deploy::run(arguments, &dir).await,
+            Err(error) => Err(error),
+        },
         _ => return None,
     };
     Some(match outcome {

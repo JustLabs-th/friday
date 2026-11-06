@@ -2,6 +2,7 @@
 
 mod changes;
 mod codex;
+mod deploy;
 mod coolify_forms;
 mod files;
 mod gateway_auth;
@@ -52,6 +53,7 @@ fn main() {
             let path = app.path().app_data_dir()?.join("scheduled-tasks-v1.json");
             app.manage(scheduler::Scheduler::load(path));
             scheduler::start(app.handle());
+            deploy::init(app.handle().clone());
             Ok(())
         })
         .build(tauri::generate_context!())
