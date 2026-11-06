@@ -17,9 +17,24 @@ use tauri::AppHandle;
 const SUFFIX: &str = "apps.digitalx.srt";
 /// `http` until the wildcard certificate is installed, then `https`.
 const SCHEME: &str = "http";
-/// How Coolify reaches the Git server over SSH (overridable: `LIAM_GITEA_SSH=git@host:port`-style hosts).
-const SSH_USER_HOST: &str = "git@git.digitalx.srt";
 const PORT: &str = "3000";
+const GIT_HOST: &str = "git.digitalx.srt";
+const GIT_SSH_PORT: &str = "22";
+
+/// How Coolify reaches the repository over SSH. By address rather than name, because the containers on
+/// the Coolify server may not resolve the company names. The port is always written out: without it a
+/// numeric owner such as `015298/work-logs` is read as a port number.
+fn ssh_remote(repo: &str) -> String {
+    let host = std::env::var("LIAM_GITEA_SSH_HOST")
+        .ok()
+        .or_else(|| {
+            use std::net::ToSocketAddrs;
+            (GIT_HOST, 22).to_socket_addrs().ok()?.find(|a| a.is_ipv4()).map(|a| a.ip().to_string())
+        })
+        .unwrap_or_else(|| GIT_HOST.to_string());
+    let port = std::env::var("LIAM_GITEA_SSH_PORT").unwrap_or_else(|_| GIT_SSH_PORT.into());
+    format!("git@{host}:{port}/{repo}.git")
+}
 
 static APP: OnceLock<AppHandle> = OnceLock::new();
 
@@ -83,17 +98,53 @@ fn new_key_pair(label: &str) -> Result<(String, String), String> {
     pair.ok_or_else(|| "Could not read the deploy key.".into())
 }
 
-async fn first_status(app_uuid: &str) -> String {
-    for _ in 0..18 {
+/// The reason a deployment failed, from the lines Coolify logged.
+async fn failure_reason(deployment: &Value) -> String {
+    let uuid = deployment["deployment_uuid"].as_str().unwrap_or("");
+    let log = tool("Coolify-get_deployment", json!({"uuid": uuid, "include_log_summary": true, "log_lines": 60}))
+        .await
+        .ok()
+        .and_then(|d| text(&d, &["data", "log_summary", "text"]).map(str::to_string))
+        .unwrap_or_default();
+    let mut lines: Vec<&str> = log
+        .lines()
+        .filter(|l| l.contains("Error") || l.contains("error") || l.contains("fatal") || l.contains("failed"))
+        .collect();
+    let tail = lines.split_off(lines.len().saturating_sub(4)).join(" | ");
+    let hint = if log.contains("Could not resolve hostname") {
+        " The Coolify server cannot look up a company name (DNS), so the platform team must make the company names resolvable from the Coolify server."
+    } else {
+        ""
+    };
+    format!("{}{hint}", tail.chars().take(500).collect::<String>())
+}
+
+/// Waits (up to four minutes) for the newest deployment: `Ok` with the application status when it is up
+/// or still building, `Err` with the reason when it failed.
+async fn wait_for_build(app_uuid: &str) -> Result<String, String> {
+    for _ in 0..24 {
         tokio::time::sleep(Duration::from_secs(10)).await;
-        if let Ok(app) = tool("Coolify-get_application", json!({"uuid": app_uuid})).await {
-            let status = text(&app, &["data", "status"]).unwrap_or("").to_string();
-            if status.starts_with("running") || status.starts_with("exited") || status.contains("error") {
-                return status;
+        let Ok(list) = tool("Coolify-list_deployments", json!({"application_uuid": app_uuid})).await else { continue };
+        let newest = list["data"]
+            .as_array()
+            .and_then(|items| items.iter().max_by_key(|d| d["created_at"].as_str().unwrap_or("").to_string()))
+            .cloned();
+        let Some(deployment) = newest else { continue };
+        match deployment["status"].as_str().unwrap_or("") {
+            "finished" => {
+                let app = tool("Coolify-get_application", json!({"uuid": app_uuid})).await.unwrap_or_default();
+                return Ok(text(&app, &["data", "status"]).unwrap_or("running").to_string());
             }
+            "failed" | "cancelled-by-user" => {
+                return Err(format!(
+                    "The deployment failed: {} This is a problem on the platform side, not in the project. Do not try again; tell the user in plain words that the platform team has to fix it.",
+                    failure_reason(&deployment).await
+                ));
+            }
+            _ => {}
         }
     }
-    "building".into()
+    Ok("still building".into())
 }
 
 pub async fn run(arguments: &Value, dir: &Path) -> Result<String, String> {
@@ -150,6 +201,12 @@ pub async fn run(arguments: &Value, dir: &Path) -> Result<String, String> {
         .map(str::to_string);
     let (app_uuid, created) = match found {
         Some(uuid) => {
+            // An application made earlier may have the wrong address; make sure it points at the repository.
+            tool(
+                "Coolify-manage_application",
+                json!({"action": "update", "uuid": uuid, "data": {"git_repository": ssh_remote(&repo), "git_branch": "main"}}),
+            )
+            .await?;
             tool("Coolify-deploy", json!({"uuid": uuid})).await?;
             (uuid, false)
         }
@@ -163,12 +220,11 @@ pub async fn run(arguments: &Value, dir: &Path) -> Result<String, String> {
             )
             .await?;
             let key_uuid = text(&key, &["data", "uuid"]).or_else(|| text(&key, &["uuid"])).ok_or("Coolify did not return the key it created.")?.to_string();
-            let ssh = std::env::var("LIAM_GITEA_SSH").unwrap_or_else(|_| SSH_USER_HOST.into());
             let created = tool(
                 "Coolify-create_application",
                 json!({"action": "deploy_key", "data": {
                     "project_uuid": project_uuid, "environment_name": environment, "server_uuid": server_uuid,
-                    "private_key_uuid": key_uuid, "git_repository": format!("{ssh}:{repo}.git"), "git_branch": "main",
+                    "private_key_uuid": key_uuid, "git_repository": ssh_remote(&repo), "git_branch": "main",
                     "build_pack": "dockerfile", "ports_exposes": PORT, "name": name, "domains": url,
                     "instant_deploy": true,
                 }}),
@@ -179,7 +235,10 @@ pub async fn run(arguments: &Value, dir: &Path) -> Result<String, String> {
         }
     };
 
-    // 4. A tile on the dashboard people open applications from (once).
+    // 4. Wait for the build; only a project that is up gets a tile on the dashboard.
+    let status = wait_for_build(&app_uuid).await?;
+
+    // 5. A tile on the dashboard people open applications from (once).
     let tile = match tool("Homarr-app_search", json!({"query": name, "limit": 20})).await {
         Ok(found) if found.to_string().contains(&format!("\"{name}\"")) => "already on the dashboard",
         _ => match tool(
@@ -193,9 +252,8 @@ pub async fn run(arguments: &Value, dir: &Path) -> Result<String, String> {
         },
     };
 
-    let status = first_status(&app_uuid).await;
     Ok(format!(
-        "{} {name}. Address: {url} ({tile}). Status: {status}. If the address does not open yet, the first build can take a few minutes; check Coolify-get_application or Coolify-get_logs for application {app_uuid}.",
+        "{} {name}. Address: {url} ({tile}). Status: {status}. If the address does not open from this computer, the name {name}.{SUFFIX} may not be set up on it yet (application {app_uuid}).",
         if created { "Created and deployed" } else { "Redeployed" }
     ))
 }
@@ -210,6 +268,13 @@ mod tests {
         assert!(private.starts_with("-----BEGIN OPENSSH PRIVATE KEY-----"));
         assert!(public.starts_with("ssh-ed25519 "));
         assert!(public.ends_with("liam-test"));
+    }
+
+    #[test]
+    fn the_ssh_address_always_has_a_port_so_a_numeric_owner_is_not_read_as_one() {
+        std::env::set_var("LIAM_GITEA_SSH_HOST", "192.168.100.7");
+        assert_eq!(ssh_remote("015298/work-logs"), "git@192.168.100.7:22/015298/work-logs.git");
+        std::env::remove_var("LIAM_GITEA_SSH_HOST");
     }
 
     #[test]
