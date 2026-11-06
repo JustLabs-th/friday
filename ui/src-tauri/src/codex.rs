@@ -165,6 +165,11 @@ pub async fn codex_connect(app: AppHandle, bridge: State<'_, Bridge>) -> Result<
     for (name, value) in crate::trust::tool_env() {
         command.env(name, value);
     }
+    // Run the agent's commands in the Windows sandbox (no administrator rights needed): inside the
+    // project folder they run without asking, and anything outside it, or on the network, still asks.
+    // Without it every command, even listing a folder, needs the person's approval.
+    #[cfg(windows)]
+    command.args(["-c", r#"windows.sandbox="unelevated""#]);
     command
         .args(["app-server", "--listen", "stdio://"])
         .current_dir(&cwd)
