@@ -17,8 +17,9 @@ const CLIENTS: &[(&str, &[&str])] = &[
             "get_infrastructure_overview", "list_servers", "list_projects", "get_project",
             "list_resources", "list_applications", "get_application", "list_unhealthy_resources",
             "list_deployments", "get_deployment", "get_logs", "list_env_keys",
-            "create_application", "manage_application", "manage_env", "deploy",
-            "cancel_deployment", "rollback_application",
+            "deploy", "cancel_deployment", "rollback_application",
+            // create_application, manage_application and manage_env are offered as simple forms
+            // (coolify_forms.rs): their free-form `data` object comes back from the model empty.
         ],
     ),
     (
@@ -139,6 +140,14 @@ pub async fn dynamic_tools() -> Vec<Value> {
         }
         .await
         .unwrap_or_default();
+        // The forms need the real tools behind them, so they appear only when the gateway grants those.
+        if *client == "Coolify"
+            && ["create_application", "manage_application", "manage_env"]
+                .iter()
+                .all(|t| tools.iter().any(|tool| tool["name"] == format!("Coolify-{t}")))
+        {
+            specs.extend(crate::coolify_forms::specs());
+        }
         specs.extend(tools.into_iter().filter_map(|tool| {
             let name = tool["name"].as_str()?;
             let short = name.strip_prefix(&format!("{client}-"))?;
@@ -163,6 +172,12 @@ pub async fn dynamic_tools() -> Vec<Value> {
 
 /// Runs one tool and returns (text for the model, whether it worked).
 pub async fn call(name: &str, arguments: Value) -> (String, bool) {
+    let (name, arguments) = match crate::coolify_forms::translate(name, &arguments) {
+        Some(Ok(real)) => real,
+        Some(Err(message)) => return (message, false),
+        None => (name.to_string(), arguments),
+    };
+    let name = name.as_str();
     let Some(key) = crate::gateway_auth::stored_key() else {
         return ("Not signed in to the company gateway.".into(), false);
     };

@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod codex;
+mod coolify_forms;
 mod files;
 mod gateway_auth;
 mod gitea_auth;
