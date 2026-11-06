@@ -25,8 +25,8 @@ function readProjects(): Project[] {
 type Engine = Pick<ReturnType<typeof useCodex>, 'status' | 'info'>;
 
 /**
- * The projects Friday knows about and which one is open. They are kept in local storage; Codex owns
- * the sessions. On the very first start (nothing stored) the folder Codex runs in becomes the first project.
+ * The projects Friday knows about and which one is open. They are kept in local storage; Liam owns
+ * the sessions. On the very first start (nothing stored) the folder Liam runs in becomes the first project.
  */
 export function useProjects(engine: Engine) {
   const [projects, setProjects] = useState<Project[]>(readProjects);
@@ -67,7 +67,7 @@ export function useProjects(engine: Engine) {
     }
   }, [projects]);
 
-  // Ask Codex for the sessions of every project folder once it is connected.
+  // Ask Liam for the sessions of every project folder once it is connected.
   const projectPaths = projects
     .map(project => project.path)
     .filter(Boolean)

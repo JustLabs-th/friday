@@ -32,7 +32,7 @@ export function ModelSelector({
 }: ModelSelectorProps) {
   const families = Array.from(new Set(models.map(item => item.family)));
   const current = models.find(item => item.id === modelId) ?? models[0];
-  if (!current) return <span className="text-xs text-muted-foreground">Codex default</span>;
+  if (!current) return <span className="text-xs text-muted-foreground">Liam default</span>;
   return (
     <div className="flex items-center gap-1">
       <DropdownMenu>

@@ -4,38 +4,34 @@ import type { Project } from '@/components/dialogs/new-project-dialog';
 import { PreviewPanel } from '@/components/panels/preview-panel';
 import { SessionOverview } from '@/components/panels/session-overview';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-
-export type RightPanelTab = 'overview' | 'preview';
 
 interface RightPanelProps {
-  tab: RightPanelTab;
-  onTabChange: (tab: RightPanelTab) => void;
+  /** A preview is open. It takes the place of the overview until it is closed. */
+  preview: boolean;
+  /** Closes the preview, which brings the overview back. */
   onClose: () => void;
   project: Project | null;
   runs: SandboxRunData[];
 }
 
-export function RightPanel({ tab, onTabChange, onClose, project, runs }: RightPanelProps) {
+/** The side of the chat: the session overview, replaced by the preview while one is open. */
+export function RightPanel({ preview, onClose, project, runs }: RightPanelProps) {
   return (
-    <aside aria-label="Session panel" className="flex w-80 shrink-0 flex-col border-l bg-background">
-      <Tabs value={tab} onValueChange={value => onTabChange(value as RightPanelTab)} className="min-h-0 flex-1 gap-0">
-        <div className="flex items-center justify-between border-b px-2 pt-1">
-          <TabsList variant="line">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="preview">Preview</TabsTrigger>
-          </TabsList>
-          <Button variant="ghost" size="icon-xs" aria-label="Close panel" onClick={onClose}>
+    <aside
+      aria-label={preview ? 'Preview' : 'Session overview'}
+      className="flex w-80 shrink-0 flex-col border-l bg-background"
+    >
+      {preview && (
+        <div className="flex h-9 items-center justify-between border-b px-3">
+          <h2 className="text-sm font-medium">Preview</h2>
+          <Button variant="ghost" size="icon-xs" aria-label="Close preview" onClick={onClose}>
             <XIcon aria-hidden="true" />
           </Button>
         </div>
-        <TabsContent value="overview" className="min-h-0 flex-1">
-          <SessionOverview project={project} runs={runs} />
-        </TabsContent>
-        <TabsContent value="preview" className="min-h-0 flex-1">
-          <PreviewPanel />
-        </TabsContent>
-      </Tabs>
+      )}
+      <div className="min-h-0 flex-1">
+        {preview ? <PreviewPanel /> : <SessionOverview project={project} runs={runs} />}
+      </div>
     </aside>
   );
 }

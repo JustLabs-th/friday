@@ -34,7 +34,7 @@ export function GatewayAccount({ onChanged }: { onChanged?: () => void }) {
           <p className="text-sm font-medium">LLM gateway</p>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {signedIn
-              ? `เข้าสู่ระบบแล้ว${status?.username ? ` ในชื่อ ${status.username}` : ''}`
+              ? `เข้าสู่ระบบแล้ว${status?.displayName || status?.username ? ` ในชื่อ ${status.displayName || status.username}` : ''}`
               : 'เข้าสู่ระบบด้วย SSO ของบริษัทเพื่อขอ key สำหรับใช้โมเดลผ่าน gateway'}
           </p>
           {signedIn && status?.expiresAt && (

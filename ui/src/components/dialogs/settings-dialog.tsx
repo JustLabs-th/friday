@@ -76,7 +76,7 @@ const sections: Section[] = [
         <SettingRow label="Version" description="เวอร์ชันของ Friday UI">
           <span className="text-sm text-muted-foreground">0.1.0</span>
         </SettingRow>
-        <SettingRow label="Codex engine" description={enginePath || 'ใช้ login และ configuration ของ Codex ในเครื่อง'}>
+        <SettingRow label="Liam engine" description={enginePath || 'ใช้ login และ configuration ของ Liam ในเครื่อง'}>
           <span className="text-sm text-muted-foreground">{engineLabel || 'Not connected'}</span>
           {onReconnect && (
             <Button className="ml-2" variant="outline" size="sm" onClick={onReconnect}>

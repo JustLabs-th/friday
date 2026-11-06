@@ -1,23 +1,31 @@
 import { useState } from 'react';
-import type { RightPanelTab } from '@/components/panels/right-panel';
 
-/** Whether the terminal and the right panel are showing, and which tab the right panel is on. */
+/**
+ * Whether the terminal and the side panel are showing. The side panel starts open on the session
+ * overview; a preview (opened by the user or the agent) takes its place until it is closed.
+ */
 export function usePanels() {
   const [terminalOpen, setTerminalOpen] = useState(false);
-  const [rightPanelOpen, setRightPanelOpen] = useState(false);
-  const [rightPanelTab, setRightPanelTab] = useState<RightPanelTab>('overview');
+  const [rightPanelOpen, setRightPanelOpen] = useState(true);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   return {
     terminalOpen,
     toggleTerminal: () => setTerminalOpen(open => !open),
     closeTerminal: () => setTerminalOpen(false),
     rightPanelOpen,
-    toggleRightPanel: () => setRightPanelOpen(open => !open),
-    closeRightPanel: () => setRightPanelOpen(false),
-    rightPanelTab,
-    setRightPanelTab,
+    previewOpen,
+    toggleRightPanel: () => {
+      setRightPanelOpen(open => !open);
+      setPreviewOpen(false);
+    },
+    /** Closing a preview brings the overview back; closing the overview hides the panel. */
+    closeRightPanel: () => {
+      if (previewOpen) setPreviewOpen(false);
+      else setRightPanelOpen(false);
+    },
     openPreview: () => {
-      setRightPanelTab('preview');
+      setPreviewOpen(true);
       setRightPanelOpen(true);
     },
   };

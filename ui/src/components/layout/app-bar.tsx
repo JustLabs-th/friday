@@ -3,7 +3,6 @@ import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import {
-  ChevronDown,
   Copy,
   CopyIcon,
   BookPlus,
@@ -22,9 +21,7 @@ import {
   X,
   ArrowLeft,
   ArrowRight,
-  Check,
 } from 'lucide-react';
-import type { Project } from '@/components/dialogs/new-project-dialog';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -39,10 +36,6 @@ import { copyText } from '@/lib/clipboard';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface AppBarProps {
-  title: string;
-  projects: Project[];
-  activeProjectId: string | null;
-  onSelectProject: (project: Project) => void;
   onNewProject: () => void;
   canCreateSession: boolean;
   canGoBack: boolean;
@@ -82,10 +75,6 @@ function IconButton({ label, children, ...props }: React.ComponentProps<typeof B
 }
 
 export function AppBar({
-  title,
-  projects,
-  activeProjectId,
-  onSelectProject,
   onNewProject,
   canCreateSession,
   canGoBack,
@@ -153,31 +142,7 @@ export function AppBar({
         </IconButton>
       </div>
 
-      <div className="flex min-w-0 flex-1 justify-center" data-tauri-drag-region>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button variant="ghost" size="sm" className="max-w-full gap-1 font-medium" aria-label="Choose project" />
-            }
-          >
-            <span className="truncate">{title}</span>
-            <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="center" className="w-60">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>Projects</DropdownMenuLabel>
-              {projects.length === 0 && <DropdownMenuItem onClick={onNewProject}>สร้าง project ใหม่</DropdownMenuItem>}
-              {projects.map(item => (
-                <DropdownMenuItem key={item.id} onClick={() => onSelectProject(item)}>
-                  <FolderOpen aria-hidden="true" />
-                  <span className="truncate">{item.name}</span>
-                  {item.id === activeProjectId && <Check className="ml-auto" aria-hidden="true" />}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      <div className="min-w-0 flex-1" data-tauri-drag-region />
 
       <div className="flex items-center gap-0.5">
         <IconButton

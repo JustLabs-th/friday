@@ -7,7 +7,7 @@ import { Plan, type PlanData } from '@/components/chat/plan';
 import { Markdown } from '@/components/chat/markdown';
 import { PromptInput } from '@/components/chat/prompt-input';
 import { Reasoning, type ReasoningData } from '@/components/chat/reasoning';
-import { SandboxRun, type SandboxRunData } from '@/components/chat/sandbox-run';
+import { type SandboxRunData } from '@/components/chat/sandbox-run';
 import { Sources, type Source } from '@/components/chat/sources';
 import { StackTrace } from '@/components/chat/stack-trace';
 
@@ -20,14 +20,18 @@ export interface Message {
   reasoning?: ReasoningData;
   plan?: PlanData;
   steps?: ChainStep[];
-  /** Commands the assistant already ran, with their output. */
+  /** Commands and file changes of this turn. They are listed under Background tasks, not in the chat. */
   runs?: SandboxRunData[];
+  /** The turn is still going. With a plan, the chat shows only the plan until the answer is final. */
+  running?: boolean;
   /** Full stack traces of errors the assistant hit. */
   errors?: string[];
   /** Pages the assistant read, listed after the reply. */
   sources?: Source[];
   /** Commands the assistant asked permission to run. */
   confirmations?: ConfirmationRequest[];
+  /** Where the turn's changes were saved (the company Git server), once that has happened. */
+  publish?: { status: 'saved' | 'open' | 'error'; message: string; url?: string };
 }
 
 interface ChatViewProps {
@@ -84,10 +88,18 @@ export function ChatView({
   loading = false,
   onStop,
 }: ChatViewProps) {
-  const endRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  /** Follow new output while the reader is at the bottom; stop once they scroll up to read. */
+  const following = useRef(true);
+  const lastCount = useRef(0);
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: 'end' });
-  }, [messages.length]);
+    const box = scrollRef.current;
+    if (!box) return;
+    // A new message (the user just sent one, or a session opened) always jumps to the end.
+    if (messages.length !== lastCount.current) following.current = true;
+    lastCount.current = messages.length;
+    if (following.current) box.scrollTop = box.scrollHeight;
+  }, [messages, running]);
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
@@ -105,7 +117,14 @@ export function ChatView({
           </button>
         </div>
       )}
-      <div className="min-h-0 flex-1 overflow-y-auto pb-44">
+      <div
+        ref={scrollRef}
+        onScroll={event => {
+          const box = event.currentTarget;
+          following.current = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+        }}
+        className="min-h-0 flex-1 overflow-y-auto pb-44"
+      >
         {messages.length === 0 ? (
           <div className="flex h-full items-center justify-center p-8">
             <div className="w-full max-w-md text-center">
@@ -137,9 +156,6 @@ export function ChatView({
                     {message.reasoning && <Reasoning reasoning={message.reasoning} />}
                     {message.plan && <Plan plan={message.plan} />}
                     {message.steps && message.steps.length > 0 && <ChainOfThought steps={message.steps} />}
-                    {message.runs?.map(run => (
-                      <SandboxRun key={run.id} run={run} />
-                    ))}
                     {message.errors?.map((stack, index) => (
                       <StackTrace key={index} stack={stack} defaultOpen />
                     ))}
@@ -165,11 +181,18 @@ export function ChatView({
                       </div>
                     )}
                     {message.role === 'assistant' ? (
-                      <Markdown>{message.text}</Markdown>
+                      !(message.running && message.plan) && <Markdown>{message.text}</Markdown>
                     ) : (
                       <p className="whitespace-pre-wrap">{message.text}</p>
                     )}
-                    {message.sources && <Sources sources={message.sources} />}
+                    {message.publish && (
+                      <p
+                        className={`text-xs ${message.publish.status === 'error' ? 'text-destructive' : 'text-muted-foreground'}`}
+                      >
+                        {message.publish.message}
+                      </p>
+                    )}
+                    {message.sources && !message.running && <Sources sources={message.sources} />}
                   </div>
                   {message.text && <CopyMessageButton text={message.text} />}
                 </div>
@@ -177,10 +200,9 @@ export function ChatView({
             ))}
             {(running || loading) && (
               <p role="status" className="text-xs text-muted-foreground">
-                {loading ? 'กำลังโหลด session…' : 'Codex กำลังทำงาน…'}
+                {loading ? 'กำลังโหลด session…' : 'Liam กำลังทำงาน…'}
               </p>
             )}
-            <div ref={endRef} />
           </div>
         )}
       </div>
@@ -189,7 +211,7 @@ export function ChatView({
         <div className="pointer-events-auto mx-auto w-full max-w-3xl px-6 pb-4">
           <PromptInput
             onSend={onSend}
-            placeholder="พิมพ์ข้อความถึง Codex..."
+            placeholder="พิมพ์ข้อความถึง Liam..."
             controls={controls}
             disabled={connection ? connection.status !== 'ready' || loading : false}
             running={running}
