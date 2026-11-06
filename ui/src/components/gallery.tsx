@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { ChainOfThought } from '@/components/chat/chain-of-thought';
 import { Confirmation, type ConfirmationRequest } from '@/components/chat/confirmation';
+import { ConfirmationQueue, type QueuedConfirmation } from '@/components/chat/confirmation-queue';
 import { ModelSelector } from '@/components/chat/model-selector';
 import { NewProjectDialog } from '@/components/dialogs/new-project-dialog';
 import { Plan } from '@/components/chat/plan';
@@ -58,6 +59,33 @@ const stackSample = [
   'at Object.openSync (node:fs:573:18)',
   'at Module._compile (node_modules/ts-node/dist/index.js:1621:23)',
 ].join('\n');
+
+function QueueDemo() {
+  const make = (id: string, command: string): QueuedConfirmation => ({
+    messageId: 'm',
+    request: { id, command, state: 'requested', cwd: 'E:/Projects/test/work-logs' },
+  });
+  const [items, setItems] = useState<QueuedConfirmation[]>([
+    make('a', 'powershell.exe -Command "Get-ChildItem -Force E:/Projects/test/work-logs | Select-Object Name, Length"'),
+    make('b', 'powershell.exe -Command "Get-Content C:/Users/me/.liam/skills/liam-nextjs-project/SKILL.md"'),
+    make('c', 'powershell.exe -Command "Test-Path E:/Projects/test/work-logs/node_modules"'),
+  ]);
+  return items.length ? (
+    <ConfirmationQueue
+      items={items}
+      onResolve={(_, id) => setItems(current => current.filter(item => item.request.id !== id))}
+    />
+  ) : (
+    <Button
+      variant="outline"
+      size="sm"
+      className="w-fit"
+      onClick={() => setItems([make('a', 'pnpm ui:check'), make('b', 'git status'), make('c', 'ls')])}
+    >
+      Reset
+    </Button>
+  );
+}
 
 export function Gallery() {
   const [modelId, setModelId] = useState(models[0].id);
@@ -191,6 +219,23 @@ export function Gallery() {
                     output: "ENOENT: no such file or directory, open 'bench/results.csv'",
                   },
                 ]}
+              />
+            </State>
+          </Group>
+
+          <Group title="Confirmation queue" note="คำขอที่รออยู่ซ้อนกัน แสดงทีละใบเหนือช่องพิมพ์ กดแล้วใบถัดไปขึ้นมา">
+            <State label="3 waiting (interactive)">
+              <QueueDemo />
+            </State>
+            <State label="1 waiting">
+              <ConfirmationQueue
+                items={[
+                  {
+                    messageId: 'm',
+                    request: { id: 'only', command: 'pnpm ui:check', state: 'requested', cwd: 'E:/Projects/test' },
+                  },
+                ]}
+                onResolve={() => undefined}
               />
             </State>
           </Group>

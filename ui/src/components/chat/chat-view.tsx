@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { copyText } from '@/lib/clipboard';
 import { CheckIcon, CopyIcon, FileIcon } from 'lucide-react';
 import { ChainOfThought, type ChainStep } from '@/components/chat/chain-of-thought';
-import { Confirmation, type ConfirmationRequest } from '@/components/chat/confirmation';
+import { type ConfirmationRequest } from '@/components/chat/confirmation';
+import { ConfirmationQueue } from '@/components/chat/confirmation-queue';
 import { Plan, type PlanData } from '@/components/chat/plan';
 import { Markdown } from '@/components/chat/markdown';
 import { PromptInput } from '@/components/chat/prompt-input';
@@ -206,35 +207,7 @@ export function ChatView({
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] h-28 bg-gradient-to-t from-background/90 to-transparent" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10">
         <div className="pointer-events-auto mx-auto w-full max-w-3xl px-6 pb-4">
-          {/* Requests waiting for an answer sit right above the input, where they cannot be scrolled out of sight.
-              They are stacked: one card at a time, the next appears once this one is answered. */}
-          {pendingConfirmations.length > 0 && (
-            <div className="relative mb-3" role="region" aria-label="รอการอนุมัติ">
-              {pendingConfirmations.length > 2 && (
-                <div aria-hidden="true" className="absolute inset-x-4 -bottom-2 h-3 rounded-b-xl border bg-card/60" />
-              )}
-              {pendingConfirmations.length > 1 && (
-                <div aria-hidden="true" className="absolute inset-x-2 -bottom-1 h-3 rounded-b-xl border bg-card/80" />
-              )}
-              <div className="relative max-h-[45vh] overflow-y-auto rounded-xl bg-background">
-                <Confirmation
-                  key={pendingConfirmations[0].request.id}
-                  request={pendingConfirmations[0].request}
-                  onApprove={() =>
-                    onResolveConfirmation(pendingConfirmations[0].messageId, pendingConfirmations[0].request.id, true)
-                  }
-                  onDeny={() =>
-                    onResolveConfirmation(pendingConfirmations[0].messageId, pendingConfirmations[0].request.id, false)
-                  }
-                />
-              </div>
-              {pendingConfirmations.length > 1 && (
-                <p className="mt-3 text-center text-xs text-muted-foreground">
-                  ยังมีอีก {pendingConfirmations.length - 1} รายการที่รออนุมัติ
-                </p>
-              )}
-            </div>
-          )}
+          <ConfirmationQueue items={pendingConfirmations} onResolve={onResolveConfirmation} />
           <PromptInput
             onSend={onSend}
             placeholder="พิมพ์ข้อความถึง Liam..."

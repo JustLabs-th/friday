@@ -17,18 +17,22 @@ interface ConfirmationProps {
   request: ConfirmationRequest;
   onApprove: () => void;
   onDeny: () => void;
+  /** Where this request is in the queue ("1 จาก 3"), shown when several are waiting. */
+  position?: string;
+  className?: string;
 }
 
-export function Confirmation({ request, onApprove, onDeny }: ConfirmationProps) {
+export function Confirmation({ request, onApprove, onDeny, position, className }: ConfirmationProps) {
   if (request.state === 'requested') {
     return (
-      <Item size="sm" variant="outline">
+      <Item size="sm" variant="outline" className={className}>
         <ItemMedia variant="icon">
           <TerminalIcon aria-hidden="true" />
         </ItemMedia>
         <ItemContent>
           <ItemTitle className="min-w-0">
             <span className="min-w-0">{request.kind === 'files' ? 'Allow file changes?' : 'Allow command once?'}</span>
+            {position && <span className="ml-auto shrink-0 text-xs font-normal text-muted-foreground">{position}</span>}
           </ItemTitle>
           <ItemDescription>{request.reason || 'Liam is waiting for your decision.'}</ItemDescription>
           <pre className="mt-2 max-h-52 overflow-auto whitespace-pre-wrap break-all text-xs">{request.command}</pre>
