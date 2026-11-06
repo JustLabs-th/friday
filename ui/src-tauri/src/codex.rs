@@ -69,9 +69,9 @@ async fn write(stdin: &Mutex<ChildStdin>, message: &Value) -> Result<(), String>
 async fn request(bridge: &Bridge, method: &str, params: Value) -> Result<Value, String> {
     let (stdin, pending, id, rx) = {
         let mut guard = bridge.connection.lock().await;
-        let connection = guard.as_mut().ok_or("Codex is not connected")?;
+        let connection = guard.as_mut().ok_or("Liam is not connected")?;
         if !connection.alive.load(Ordering::SeqCst) {
-            return Err("Codex disconnected. Reconnect to continue.".into());
+            return Err("Liam disconnected. Reconnect to continue.".into());
         }
         connection.next_id += 1;
         let id = connection.next_id;
@@ -91,7 +91,7 @@ async fn request(bridge: &Bridge, method: &str, params: Value) -> Result<Value, 
     let result = match tokio::time::timeout(std::time::Duration::from_secs(90), rx).await {
         Ok(Ok(result)) => result,
         _ => Err(format!(
-            "{method}: response timed out or Codex disconnected"
+            "{method}: response timed out or Liam disconnected"
         )),
     };
     pending.lock().await.remove(&id);
@@ -129,7 +129,7 @@ pub async fn codex_connect(app: AppHandle, bridge: State<'_, Bridge>) -> Result<
         .trim_start_matches("\\\\?\\")
         .to_owned();
     let mut command = Command::new(&binary);
-    // Signed in to the company gateway: point this Codex run at it (nothing is written to ~/.codex).
+    // Signed in to the company gateway: point this Liam run at it (nothing is written to ~/.codex).
     if let Some((args, key)) = crate::gateway_auth::codex_launch(&app) {
         command.args(args).env(crate::gateway_auth::GATEWAY_KEY_ENV, key);
     }
@@ -144,13 +144,13 @@ pub async fn codex_connect(app: AppHandle, bridge: State<'_, Bridge>) -> Result<
     command.creation_flags(0x08000000);
     let mut child = command.spawn().map_err(|e| {
         format!(
-            "Cannot start {}: {e}. Install Codex or set FRIDAY_CODEX_BIN.",
+            "Cannot start {}: {e}. Install Liam or set FRIDAY_CODEX_BIN.",
             binary.display()
         )
     })?;
-    let stdin = Arc::new(Mutex::new(child.stdin.take().ok_or("Missing Codex stdin")?));
-    let stdout = child.stdout.take().ok_or("Missing Codex stdout")?;
-    let stderr = child.stderr.take().ok_or("Missing Codex stderr")?;
+    let stdin = Arc::new(Mutex::new(child.stdin.take().ok_or("Missing Liam stdin")?));
+    let stdout = child.stdout.take().ok_or("Missing Liam stdout")?;
+    let stderr = child.stderr.take().ok_or("Missing Liam stderr")?;
     let pending: Pending = Arc::default();
     let approvals: Approvals = Arc::default();
     let alive = Arc::new(AtomicBool::new(true));
@@ -182,6 +182,23 @@ pub async fn codex_connect(app: AppHandle, bridge: State<'_, Bridge>) -> Result<
                             "codex-approval",
                             json!({"connectionId": generation, "message": message}),
                         );
+                    } else if method == "item/tool/call" {
+                        // A company tool (Coolify, ...): run it through the gateway and hand back the text.
+                        let id = id.clone();
+                        let stdin = reader_stdin.clone();
+                        let tool = message["params"]["tool"].as_str().unwrap_or("").to_owned();
+                        let arguments = message["params"]["arguments"].clone();
+                        tauri::async_runtime::spawn(async move {
+                            let (mut text, success) = crate::mcp_tools::call(&tool, arguments).await;
+                            // Keep a runaway answer from filling the model's small context window.
+                            if text.chars().count() > 12_000 {
+                                text = text.chars().take(12_000).collect::<String>() + "\n…(truncated)";
+                            }
+                            let _ = write(&stdin, &json!({"id": id, "result": {
+                                "contentItems": [{"type": "inputText", "text": text}],
+                                "success": success
+                            }})).await;
+                        });
                     } else {
                         let _ = write(&reader_stdin, &json!({"id": id, "error": {"code": -32601, "message": "Friday cannot render this interactive request yet"}})).await;
                         let _ = reader_app.emit(
@@ -212,7 +229,7 @@ pub async fn codex_connect(app: AppHandle, bridge: State<'_, Bridge>) -> Result<
                     let result = if let Some(error) = message.get("error") {
                         Err(error["message"]
                             .as_str()
-                            .unwrap_or("Codex request failed")
+                            .unwrap_or("Liam request failed")
                             .to_owned())
                     } else {
                         Ok(message.get("result").cloned().unwrap_or(Value::Null))
@@ -222,7 +239,7 @@ pub async fn codex_connect(app: AppHandle, bridge: State<'_, Bridge>) -> Result<
             }
         }
         for (_, tx) in reader_pending.lock().await.drain() {
-            let _ = tx.send(Err("Codex disconnected".into()));
+            let _ = tx.send(Err("Liam disconnected".into()));
         }
         reader_approvals.lock().await.clear();
         if reader_alive.swap(false, Ordering::SeqCst) {
@@ -253,7 +270,7 @@ pub async fn codex_connect(app: AppHandle, bridge: State<'_, Bridge>) -> Result<
             let mut guard = bridge.connection.lock().await;
             let connection = guard
                 .as_mut()
-                .ok_or("Codex disconnected during initialization")?;
+                .ok_or("Liam disconnected during initialization")?;
             connection.info["server"] = result;
             Ok(connection.info.clone())
         }
@@ -268,9 +285,13 @@ pub async fn codex_connect(app: AppHandle, bridge: State<'_, Bridge>) -> Result<
 pub async fn codex_request(
     bridge: State<'_, Bridge>,
     method: String,
-    params: Value,
+    mut params: Value,
 ) -> Result<Value, String> {
     if method == "thread/start" {
+        let tools = crate::mcp_tools::dynamic_tools().await;
+        if !tools.is_empty() {
+            params["dynamicTools"] = Value::Array(tools);
+        }
         let cwd = params["cwd"]
             .as_str()
             .ok_or("Choose a project directory first")?;
@@ -293,8 +314,12 @@ pub async fn codex_request(
             | "thread/archive"
             | "turn/start"
             | "turn/interrupt"
+            // Read-only views for the Connectors page, and reloading the MCP configuration.
+            | "mcpServerStatus/list"
+            | "config/mcpServer/reload"
+            | "app/list"
     ) {
-        return Err(format!("Unsupported Codex method: {method}"));
+        return Err(format!("Unsupported Liam method: {method}"));
     }
     request(&bridge, &method, params).await
 }
@@ -302,7 +327,7 @@ pub async fn codex_request(
 #[tauri::command]
 pub async fn codex_pending(bridge: State<'_, Bridge>) -> Result<Value, String> {
     let guard = bridge.connection.lock().await;
-    let connection = guard.as_ref().ok_or("Codex is not connected")?;
+    let connection = guard.as_ref().ok_or("Liam is not connected")?;
     let requests: Vec<Value> = connection
         .approvals
         .lock()
@@ -323,7 +348,7 @@ pub async fn codex_respond(
         return Err("Only one-time approval decisions are supported".into());
     }
     let guard = bridge.connection.lock().await;
-    let connection = guard.as_ref().ok_or("Codex is not connected")?;
+    let connection = guard.as_ref().ok_or("Liam is not connected")?;
     let request = connection
         .approvals
         .lock()

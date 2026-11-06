@@ -7,6 +7,21 @@ import type { PlanData } from '@/components/chat/plan';
 import type { ModelInfo, Effort } from '@/lib/models';
 
 export interface EngineInfo { connectionId: number; binary: string; cwd: string; server: { userAgent?: string } }
+export interface McpServer {
+  name: string;
+  /** notStarted, starting, connected, authenticationRequired, failed, cancelled or disabled. */
+  status: string;
+  /** unknown, unsupported, notLoggedIn, bearerToken or oAuth. */
+  auth: string;
+  origin?: string;
+  toolCount: number;
+  error?: string;
+}
+interface RawMcpServer { name: string; runtimeStatus?: string | null; authStatus: string; httpOrigin?: string | null; tools?: Record<string, unknown>; toolsError?: string | null }
+/** What happened when the turn's changes were saved to the company Git server. */
+export interface PublishNote { status: 'saved' | 'open' | 'error'; message: string; url?: string }
+export interface Connector { id: string; name: string; description?: string; logoUrl?: string; connected: boolean; enabled: boolean }
+interface RawApp { id: string; name: string; description?: string | null; logoUrl?: string | null; isAccessible: boolean; isEnabled: boolean }
 export interface CodexThread { id: string; name?: string | null; preview: string; cwd: string; updatedAt?: number; turns?: WireTurn[] }
 interface Input { type: string; text?: string; url?: string; path?: string }
 interface Item {
@@ -17,7 +32,7 @@ interface Item {
   action?: { type: string; url?: string; query?: string; queries?: string[] };
 }
 interface WireTurn { id: string; status: string; items: Item[]; error?: { message: string } | null }
-interface Turn extends WireTurn { plan?: PlanData; approvals?: ConfirmationRequest[] }
+interface Turn extends WireTurn { plan?: PlanData; approvals?: ConfirmationRequest[]; publish?: PublishNote }
 interface RpcMessage {
   id?: string | number; method: string;
   params: {
@@ -84,13 +99,15 @@ function renderTurns(turns: Turn[]): Message[] {
       text: turn.items.filter(item => item.type === 'agentMessage').map(item => item.text || '').filter(Boolean).join('\n\n'),
       reasoning: reasoning.length ? { text: reasoning.flatMap(item => item.summary || []).join('\n\n'), running: isActive(turn.status) && !turn.items.some(item => item.type === 'agentMessage') } : undefined,
       plan: turn.plan,
+      publish: turn.publish,
+      running: isActive(turn.status) || undefined,
       runs: runs.length ? runs : undefined,
       steps: steps.length ? steps : undefined,
       sources: sources.length ? sources : undefined,
       confirmations: turn.approvals,
       errors: turn.error ? [turn.error.message] : undefined,
     };
-    return [...users, ...(assistant.text || reasoning.length || runs.length || steps.length || turn.plan || turn.error || turn.approvals?.length ? [assistant] : [])];
+    return [...users, ...(assistant.text || reasoning.length || runs.length || steps.length || turn.plan || turn.error || turn.approvals?.length || turn.publish ? [assistant] : [])];
   });
 }
 
@@ -122,6 +139,8 @@ class CodexClient {
   private listeners = new Set<() => void>();
   private unlisten: UnlistenFn[] = [];
   private connecting: Promise<EngineInfo> | null = null;
+  /** Chats from another provider: shown for reading, with the reason they cannot be continued. */
+  private readOnly = new Map<string, string>();
   private turns = new Map<string, Turn[]>();
   private loaded = new Set<string>();
   private resuming = new Map<string, Promise<void>>();
@@ -218,6 +237,7 @@ class CodexClient {
         turn.approvals = turn.approvals?.map(a => a.state === 'requested' ? { ...a, state: 'resolved' } : a);
         this.running(threadId, null);
         for (const [key, request] of this.approvals) if (request.params.threadId === threadId && request.params.turnId === turnId) this.approvals.delete(key);
+        if (turn.status === 'completed') void this.saveWork(threadId, turnId);
         break;
       case 'error':
         if (p.error) { turn.error = p.error; this.report(p.error.message); }
@@ -233,6 +253,26 @@ class CodexClient {
     }
     this.publish(threadId);
   };
+
+  /**
+   * After a turn finishes, saves its changes to the company Git server (commit, pull request, merge).
+   * People never have to touch git; the result is shown under the reply. Quiet when there is nothing
+   * to save or Gitea is not connected.
+   */
+  private async saveWork(threadId: string, turnId: string) {
+    const thread = this.snapshot.threads[threadId];
+    if (!isTauri() || !thread?.cwd) return;
+    const turn = this.turn(threadId, turnId);
+    const request = (turn.items.find(item => item.type === 'userMessage')?.content || []).find(input => input.type === 'text')?.text || thread.name || thread.preview || 'Update';
+    try {
+      const result = await invoke<{ status: string; message: string; url?: string | null }>('publish_changes', { cwd: thread.cwd, summary: request });
+      if (result.status !== 'saved' && result.status !== 'open' && result.status !== 'error') return;
+      turn.publish = { status: result.status, message: result.message, url: result.url || undefined };
+    } catch (error) {
+      turn.publish = { status: 'error', message: `บันทึกงานขึ้น Gitea ไม่สำเร็จ: ${String(error)}` };
+    }
+    this.publish(threadId);
+  }
 
   private approval = (message: RpcMessage) => {
     const p = message.params;
@@ -252,9 +292,52 @@ class CodexClient {
     this.publish(p.threadId);
   };
 
+  /** MCP servers the engine knows, with their connection and sign-in state. */
+  mcpServers = async (): Promise<McpServer[]> => {
+    await this.connect();
+    const servers: McpServer[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await rpc<{ data: RawMcpServer[]; nextCursor?: string | null }>('mcpServerStatus/list', { cursor, limit: 100, detail: 'toolsAndAuthOnly' });
+      servers.push(...page.data.map(server => ({
+        name: server.name,
+        status: server.runtimeStatus || 'notStarted',
+        auth: server.authStatus,
+        origin: server.httpOrigin || undefined,
+        toolCount: Object.keys(server.tools || {}).length,
+        error: server.toolsError || undefined,
+      })));
+      cursor = page.nextCursor || undefined;
+    } while (cursor);
+    return servers;
+  };
+
+  /** Reloads the MCP configuration so servers added or changed in the engine's config are picked up. */
+  reloadMcp = async (): Promise<void> => {
+    await this.connect();
+    await rpc('config/mcpServer/reload');
+  };
+
+  /** Connectors (apps) the engine offers; empty when the account has none. */
+  connectors = async (): Promise<Connector[]> => {
+    await this.connect();
+    const apps: Connector[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await rpc<{ data: RawApp[]; nextCursor?: string | null }>('app/list', { cursor, limit: 100 });
+      apps.push(...page.data.map(app => ({ id: app.id, name: app.name, description: app.description || undefined, logoUrl: app.logoUrl || undefined, connected: app.isAccessible, enabled: app.isEnabled })));
+      cursor = page.nextCursor || undefined;
+    } while (cursor);
+    return apps;
+  };
+
   /** Stops the engine and starts it again, so a changed gateway sign-in takes effect. */
   restart = async (): Promise<EngineInfo> => {
     await invoke('codex_disconnect');
+    // The old connection is gone: forget it so connect() starts a new one instead of reusing it.
+    this.loaded.clear();
+    this.approvals.clear();
+    this.update({ status: 'connecting', info: null, running: {}, error: '' });
     return this.connect();
   };
 
@@ -265,7 +348,7 @@ class CodexClient {
     return this.connecting;
   };
   private async open(): Promise<EngineInfo> {
-    if (!isTauri()) throw new Error('เชื่อม Codex ได้ในแอป Friday Desktop เท่านั้น');
+    if (!isTauri()) throw new Error('เชื่อม Liam ได้ในแอป Friday Desktop เท่านั้น');
     this.update({ status: 'connecting', error: '' });
     try {
       if (!this.unlisten.length) {
@@ -276,16 +359,16 @@ class CodexClient {
           if (e.payload.connectionId === this.snapshot.info?.connectionId) this.approval(e.payload.message);
         }));
         this.unlisten.push(await listen<Envelope>('codex-unsupported', e => {
-          if (e.payload.connectionId === this.snapshot.info?.connectionId) this.report(`Friday ยังไม่รองรับ ${e.payload.message.method}; Codex ได้รับการปฏิเสธคำขอนี้แล้ว`);
+          if (e.payload.connectionId === this.snapshot.info?.connectionId) this.report(`Friday ยังไม่รองรับ ${e.payload.message.method}; Liam ได้รับการปฏิเสธคำขอนี้แล้ว`);
         }));
         this.unlisten.push(await listen<{ connectionId: number }>('codex-disconnected', e => {
           if (e.payload.connectionId === this.snapshot.info?.connectionId) {
             for (const threadId of Object.keys(this.snapshot.running)) {
               const turn = this.turn(threadId, this.snapshot.running[threadId]);
-              turn.status = 'failed'; turn.error = { message: 'Codex disconnected' }; this.publish(threadId);
+              turn.status = 'failed'; turn.error = { message: 'Liam disconnected' }; this.publish(threadId);
             }
             this.loaded.clear();
-            this.update({ status: 'error', running: {}, error: 'Codex disconnected. กดเชื่อมต่อใหม่เพื่อทำต่อ' });
+            this.update({ status: 'error', running: {}, error: 'Liam disconnected. กดเชื่อมต่อใหม่เพื่อทำต่อ' });
           }
         }));
       }
@@ -297,7 +380,7 @@ class CodexClient {
         rpc<{ account: { email?: string; type?: string } | null }>('account/read', { refreshToken: false }),
         this.catalog(),
       ]);
-      this.update({ status: 'ready', account: account.account?.email || account.account?.type || 'Codex configuration', models: catalog.models, defaultModel: catalog.defaultModel });
+      this.update({ status: 'ready', account: account.account?.email || account.account?.type || 'Liam configuration', models: catalog.models, defaultModel: catalog.defaultModel });
       const pending = await invoke<RpcMessage[]>('codex_pending');
       pending.forEach(this.approval);
       return info;
@@ -341,7 +424,7 @@ class CodexClient {
       cwd: path, approvalPolicy: 'on-request', approvalsReviewer: 'user', sandbox: 'workspace-write',
       ...(prompt ? { developerInstructions: prompt } : {}),
     });
-    if (!samePath(result.thread.cwd, path)) throw new Error(`Codex ใช้โฟลเดอร์ ${result.thread.cwd} ซึ่งไม่ตรงกับ ${path}; ยังไม่ได้ส่งข้อความ`);
+    if (!samePath(result.thread.cwd, path)) throw new Error(`Liam ใช้โฟลเดอร์ ${result.thread.cwd} ซึ่งไม่ตรงกับ ${path}; ยังไม่ได้ส่งข้อความ`);
     this.loaded.add(result.thread.id);
     this.turns.set(result.thread.id, []);
     this.update({ threads: { ...this.snapshot.threads, [result.thread.id]: result.thread } });
@@ -362,8 +445,22 @@ class CodexClient {
     this.buffered.set(threadId, []);
     this.update({ loading: { ...this.snapshot.loading, [threadId]: true } });
     try {
-      const result = await rpc<{ thread: CodexThread }>('thread/resume', { threadId, approvalPolicy: 'on-request', approvalsReviewer: 'user', sandbox: 'workspace-write' });
-      const thread = result.thread;
+      let thread: CodexThread;
+      try {
+        thread = (await rpc<{ thread: CodexThread }>('thread/resume', { threadId, approvalPolicy: 'on-request', approvalsReviewer: 'user', sandbox: 'workspace-write' })).thread;
+        this.readOnly.delete(threadId);
+      } catch (error) {
+        // A chat made under another provider (OpenAI vs the company gateway) cannot be continued
+        // here, but its history can still be read.
+        const message = String(error);
+        if (!/modelProviderMismatch|current provider/.test(message)) throw error;
+        thread = (await rpc<{ thread: CodexThread }>('thread/read', { threadId, includeTurns: true })).thread;
+        this.readOnly.set(threadId, message.match(/This chat uses [^,]+/)?.[0] || 'Chat นี้ใช้ provider อื่น');
+        this.turns.set(threadId, (thread.turns || []).map(turn => ({ ...turn, items: turn.items || [] })));
+        this.update({ threads: { ...this.snapshot.threads, [threadId]: thread } });
+        this.publish(threadId);
+        return;
+      }
       this.turns.set(threadId, (thread.turns || []).map(turn => ({ ...turn, items: turn.items || [] })));
       this.loaded.add(threadId);
       this.update({ threads: { ...this.snapshot.threads, [threadId]: thread } });
@@ -382,6 +479,8 @@ class CodexClient {
 
   send = async (threadId: string, text: string, files: File[], model: string, effort: Effort) => {
     await this.resume(threadId);
+    const readOnly = this.readOnly.get(threadId);
+    if (readOnly) throw new Error(`${readOnly} จึงส่งข้อความต่อที่นี่ไม่ได้ (ออกจากระบบ/เข้าสู่ระบบ gateway เพื่อสลับ provider) เปิดเริ่ม session ใหม่เพื่อคุยต่อ`);
     if (this.snapshot.running[threadId]) throw new Error('Session นี้กำลังทำงานอยู่');
     const input = await inputs(text, files);
     this.running(threadId, 'starting');

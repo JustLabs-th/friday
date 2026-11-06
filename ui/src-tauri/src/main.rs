@@ -2,6 +2,9 @@
 
 mod codex;
 mod gateway_auth;
+mod gitea_auth;
+mod mcp_tools;
+mod publish;
 mod scheduler;
 mod skills;
 use tauri::Manager;
@@ -27,6 +30,10 @@ fn main() {
             gateway_auth::gateway_status,
             gateway_auth::gateway_login,
             gateway_auth::gateway_logout,
+            gitea_auth::gitea_status,
+            gitea_auth::gitea_login,
+            gitea_auth::gitea_logout,
+            publish::publish_changes,
         ])
         .setup(|app| {
             let path = app.path().app_data_dir()?.join("scheduled-tasks-v1.json");

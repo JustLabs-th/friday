@@ -48,6 +48,8 @@ fn config() -> Result<Config, String> {
 pub struct GatewayStatus {
     pub signed_in: bool,
     pub username: Option<String>,
+    /// The person's name from SSO, when the directory has one.
+    pub display_name: Option<String>,
     pub expires_at: Option<String>,
 }
 
@@ -61,7 +63,7 @@ fn entry() -> Result<keyring::Entry, String> {
     keyring::Entry::new(SERVICE, KEY_ENTRY).map_err(|e| e.to_string())
 }
 
-/// The stored gateway key, for the code that configures Codex. Never sent to the frontend.
+/// The stored gateway key, for the code that configures Liam. Never sent to the frontend.
 pub fn stored_key() -> Option<String> {
     entry().ok()?.get_password().ok()
 }
@@ -69,9 +71,9 @@ pub fn stored_key() -> Option<String> {
 const CATALOG: &str = include_str!("../resources/gateway-catalog.json");
 const GATEWAY_MODEL: &str = "llama/qwen3.8-27b";
 
-/// What Codex needs to use the gateway: command-line settings that override its config for this run
+/// What Liam needs to use the gateway: command-line settings that override its config for this run
 /// only (the user's `~/.codex/config.toml` is untouched) and the key as an environment variable.
-/// `None` when nobody is signed in, so Codex runs with its usual configuration.
+/// `None` when nobody is signed in, so Liam runs with its usual configuration.
 pub fn codex_launch(app: &AppHandle) -> Option<(Vec<String>, String)> {
     let key = stored_key()?;
     let dir = app.path().app_data_dir().ok()?;
@@ -125,7 +127,7 @@ pub fn gateway_logout(app: AppHandle) -> Result<GatewayStatus, String> {
     Ok(GatewayStatus::default())
 }
 
-fn random_b64(bytes: usize) -> String {
+pub(crate) fn random_b64(bytes: usize) -> String {
     let mut buf = vec![0u8; bytes];
     rand::thread_rng().fill_bytes(&mut buf);
     URL_SAFE_NO_PAD.encode(buf)
@@ -145,6 +147,7 @@ struct IssuedKey {
 #[derive(Deserialize)]
 struct PortalLogin {
     username: Option<String>,
+    display_name: Option<String>,
 }
 
 const DONE_PAGE: &str = "<!doctype html><meta charset=utf-8><title>Friday</title>\
@@ -152,7 +155,7 @@ const DONE_PAGE: &str = "<!doctype html><meta charset=utf-8><title>Friday</title
 <h2>เข้าสู่ระบบแล้ว</h2><p>กลับไปที่ Friday ได้เลย ปิดหน้านี้ได้</p></body>";
 
 /// Waits for the browser to come back to the loopback redirect and returns the authorization code.
-async fn wait_for_code(listener: TcpListener, expected_state: &str) -> Result<String, String> {
+pub(crate) async fn wait_for_code(listener: TcpListener, expected_state: &str) -> Result<String, String> {
     loop {
         let (mut stream, _) = listener.accept().await.map_err(|e| e.to_string())?;
         let mut buf = vec![0u8; 8192];
@@ -267,6 +270,7 @@ pub async fn gateway_login(app: AppHandle) -> Result<GatewayStatus, String> {
     let status = GatewayStatus {
         signed_in: true,
         username: login.username,
+        display_name: login.display_name.filter(|name| !name.trim().is_empty()),
         expires_at: issued.expires_at.map(|v| v.as_str().map(str::to_string).unwrap_or_else(|| v.to_string())),
     };
     if let Ok(path) = status_path(&app) {

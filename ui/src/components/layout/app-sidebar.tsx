@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import {
   CalendarClock,
+  Plug,
   ChevronRight,
-  Command,
   Ellipsis,
   FolderOpen,
   Pencil,
@@ -22,7 +22,6 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -30,8 +29,9 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import type { Project } from '@/components/dialogs/new-project-dialog';
+import { useGatewayStatus } from '@/hooks/use-gateway-status';
 
-export type Page = 'home' | 'scheduled';
+export type Page = 'home' | 'scheduled' | 'connectors';
 
 export interface Session {
   id: string;
@@ -221,24 +221,11 @@ export function AppSidebar({
     if (isMobile) setOpenMobile(false);
   }
 
+  const gateway = useGatewayStatus();
+  const userName = (gateway.signedIn && (gateway.displayName || gateway.username)) || 'Friday';
+
   return (
     <Sidebar collapsible="icon" aria-label="Main navigation" className="top-11 h-[calc(100svh-2.75rem)] border-r-0">
-      <SidebarHeader className="p-2">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton size="lg" tooltip="Friday" onClick={() => navigate('home')} className="gap-3">
-              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                <Command className="size-4" aria-hidden="true" />
-              </div>
-              <div className="grid flex-1 text-left leading-tight">
-                <span className="truncate font-semibold">Friday</span>
-                <span className="truncate text-xs text-muted-foreground">Codex GUI</span>
-              </div>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarHeader>
-
       <SidebarContent>
         <SidebarGroup className="pt-1">
           <SidebarMenu>
@@ -256,6 +243,12 @@ export function AppSidebar({
               <SidebarMenuButton tooltip="Scheduled tasks" onClick={() => navigate('scheduled')}>
                 <CalendarClock aria-hidden="true" />
                 <span>Scheduled tasks</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton tooltip="Connectors" onClick={() => navigate('connectors')}>
+                <Plug aria-hidden="true" />
+                <span>Connectors</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
@@ -305,9 +298,11 @@ export function AppSidebar({
         <div className="flex items-center justify-between gap-1 group-data-[collapsible=icon]:flex-col">
           <div className="flex min-w-0 items-center gap-2 px-2 py-1.5 text-sm group-data-[collapsible=icon]:px-1">
             <Avatar className="size-6 shrink-0">
-              <AvatarFallback className="bg-muted text-xs font-medium text-foreground">F</AvatarFallback>
+              <AvatarFallback className="bg-muted text-xs font-medium uppercase text-foreground">
+                {userName.slice(0, 1)}
+              </AvatarFallback>
             </Avatar>
-            <span className="truncate font-medium group-data-[collapsible=icon]:hidden">Friday</span>
+            <span className="truncate font-medium group-data-[collapsible=icon]:hidden">{userName}</span>
           </div>
           <button
             type="button"

@@ -6,6 +6,7 @@ import { NewProjectDialog, type Project } from '@/components/dialogs/new-project
 import { AppBar } from '@/components/layout/app-bar';
 import { NoProject } from '@/components/layout/no-project';
 import { ChatView } from '@/components/chat/chat-view';
+import { ConnectorsPage } from '@/components/connectors/connectors-page';
 import { ScheduledTasks } from '@/components/scheduling/scheduled-tasks';
 import { SaveSkillDialog } from '@/components/dialogs/save-skill-dialog';
 import { ConfirmDeleteDialog, type ItemTarget } from '@/components/dialogs/confirm-delete-dialog';
@@ -26,10 +27,10 @@ import { useProjects } from '@/hooks/use-projects';
 import { useSearchShortcut } from '@/hooks/use-search-shortcut';
 
 function connectionLabel(status: string) {
-  if (status === 'ready') return 'Codex connected · workspace access · approvals on request';
-  if (status === 'connecting') return 'กำลังเชื่อมต่อ Codex…';
-  if (status === 'browser') return 'เปิด Friday Desktop เพื่อเชื่อมต่อ Codex';
-  return 'Codex disconnected';
+  if (status === 'ready') return 'Liam connected · workspace access · approvals on request';
+  if (status === 'connecting') return 'กำลังเชื่อมต่อ Liam…';
+  if (status === 'browser') return 'เปิด Friday Desktop เพื่อเชื่อมต่อ Liam';
+  return 'Liam disconnected';
 }
 
 const folderName = (path: string) => path.split(/[\\/]/).filter(Boolean).pop();
@@ -75,6 +76,8 @@ export function App() {
   const activeRuns = (activeSessionId ? (messages[activeSessionId] ?? []) : []).flatMap(message => message.runs ?? []);
   const sessionRunning = !!(activeSessionId && engine.running[activeSessionId]);
   const scheduledPage = nav.page === 'scheduled';
+  const connectorsPage = nav.page === 'connectors';
+  const sidePage = scheduledPage || connectorsPage;
 
   function setTheme(next: boolean) {
     setDark(next);
@@ -190,10 +193,6 @@ export function App() {
     <TooltipProvider>
       <SidebarProvider className="h-svh min-h-0 flex-col overflow-hidden">
         <AppBar
-          title={scheduledPage ? 'Scheduled tasks' : (activeProject?.name ?? 'Friday')}
-          projects={projects}
-          activeProjectId={activeProjectId}
-          onSelectProject={selectProject}
           onNewProject={() => setNewProjectOpen(true)}
           canCreateSession={activeProject !== null && engine.status === 'ready'}
           canGoBack={nav.canGoBack}
@@ -245,7 +244,9 @@ export function App() {
             )}
             <div className="flex min-h-0 min-w-0 flex-1">
               <main className="flex min-h-0 min-w-0 flex-1 flex-col" aria-labelledby="page-title">
-                {scheduledPage ? (
+                {connectorsPage ? (
+                  <ConnectorsPage engineReady={engine.status === 'ready'} />
+                ) : scheduledPage ? (
                   <ScheduledTasks
                     projects={projects}
                     models={engine.models}
@@ -290,17 +291,16 @@ export function App() {
                   <NoProject onCreate={() => setNewProjectOpen(true)} />
                 )}
               </main>
-              {!scheduledPage && panels.rightPanelOpen && (
+              {!sidePage && panels.rightPanelOpen && (
                 <RightPanel
-                  tab={panels.rightPanelTab}
-                  onTabChange={panels.setRightPanelTab}
+                  preview={panels.previewOpen}
                   onClose={panels.closeRightPanel}
                   project={activeProject}
                   runs={activeRuns}
                 />
               )}
             </div>
-            {!scheduledPage && panels.terminalOpen && (
+            {!sidePage && panels.terminalOpen && (
               <TerminalPanel runs={activeRuns} onClose={panels.closeTerminal} />
             )}
           </SidebarInset>
