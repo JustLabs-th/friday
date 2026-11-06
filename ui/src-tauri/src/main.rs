@@ -7,6 +7,10 @@ mod mcp_tools;
 mod publish;
 mod scheduler;
 mod skills;
+
+/// The company package registry (Nexus).
+pub const NEXUS_NPM: &str = "https://nexus.digitalx.srt/repository/npm-group/";
+pub const NEXUS_PIP: &str = "https://nexus.digitalx.srt/repository/pypi-hosted/simple";
 use tauri::Manager;
 
 fn main() {

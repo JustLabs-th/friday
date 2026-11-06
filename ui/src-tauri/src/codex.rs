@@ -133,6 +133,11 @@ pub async fn codex_connect(app: AppHandle, bridge: State<'_, Bridge>) -> Result<
     if let Some((args, key)) = crate::gateway_auth::codex_launch(&app) {
         command.args(args).env(crate::gateway_auth::GATEWAY_KEY_ENV, key);
     }
+    // Packages come from the company Nexus (curated), not the internet. These are read by npm,
+    // pnpm, yarn and pip, so whatever the agent installs in a project goes through it.
+    command
+        .env("npm_config_registry", crate::NEXUS_NPM)
+        .env("PIP_INDEX_URL", crate::NEXUS_PIP);
     command
         .args(["app-server", "--listen", "stdio://"])
         .current_dir(&cwd)
