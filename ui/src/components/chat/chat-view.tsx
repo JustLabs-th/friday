@@ -89,6 +89,11 @@ export function ChatView({
   onStop,
 }: ChatViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const pendingConfirmations = messages.flatMap(message =>
+    (message.confirmations || [])
+      .filter(request => request.state === 'requested')
+      .map(request => ({ messageId: message.id, request })),
+  );
   /** Follow new output while the reader is at the bottom; stop once they scroll up to read. */
   const following = useRef(true);
   const lastCount = useRef(0);
@@ -159,17 +164,6 @@ export function ChatView({
                     {message.errors?.map((stack, index) => (
                       <StackTrace key={index} stack={stack} defaultOpen />
                     ))}
-                    {/* Only a request waiting for an answer belongs in the conversation; once answered it is just noise. */}
-                    {message.confirmations
-                      ?.filter(request => request.state === 'requested')
-                      .map(request => (
-                        <Confirmation
-                          key={request.id}
-                          request={request}
-                          onApprove={() => onResolveConfirmation(message.id, request.id, true)}
-                          onDeny={() => onResolveConfirmation(message.id, request.id, false)}
-                        />
-                      ))}
                     {message.files.length > 0 && (
                       <div className="mb-2 flex flex-wrap gap-1.5">
                         {message.files.map((name, index) => (
@@ -212,6 +206,23 @@ export function ChatView({
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] h-28 bg-gradient-to-t from-background/90 to-transparent" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10">
         <div className="pointer-events-auto mx-auto w-full max-w-3xl px-6 pb-4">
+          {/* Requests waiting for an answer sit right above the input, where they cannot be scrolled out of sight. */}
+          {pendingConfirmations.length > 0 && (
+            <div
+              className="mb-3 flex max-h-[45vh] flex-col gap-2 overflow-y-auto"
+              role="region"
+              aria-label="รอการอนุมัติ"
+            >
+              {pendingConfirmations.map(({ messageId, request }) => (
+                <Confirmation
+                  key={request.id}
+                  request={request}
+                  onApprove={() => onResolveConfirmation(messageId, request.id, true)}
+                  onDeny={() => onResolveConfirmation(messageId, request.id, false)}
+                />
+              ))}
+            </div>
+          )}
           <PromptInput
             onSend={onSend}
             placeholder="พิมพ์ข้อความถึง Liam..."
