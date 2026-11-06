@@ -113,22 +113,25 @@ fn read_status(app: &AppHandle) -> GatewayStatus {
 
 /// Where this person's sessions, settings and cache live: one folder per signed-in user, so a PC shared
 /// by several people (or one person signing in as someone else) never shows another user's history.
-/// `None` when nobody is signed in or the name is unusable, so Liam falls back to its usual folder.
+/// Never the user's own `~/.codex`: that belongs to whatever Codex they use themselves, and Liam must
+/// neither read nor write it. Before anyone has signed in (or without a usable name) a shared Liam
+/// folder is used instead.
 pub fn user_home(app: &AppHandle) -> Option<PathBuf> {
     let status = read_status(app);
-    if !status.signed_in {
-        return None;
-    }
     let name: String = status
-        .username?
+        .username
+        .filter(|_| status.signed_in)
+        .unwrap_or_default()
         .to_lowercase()
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') { c } else { '_' })
         .collect();
-    if name.is_empty() || name.chars().all(|c| c == '.') {
-        return None;
-    }
-    let dir = app.path().app_data_dir().ok()?.join("users").join(name).join("engine");
+    let root = app.path().app_data_dir().ok()?;
+    let dir = if name.is_empty() || name.chars().all(|c| c == '.') {
+        root.join("engine")
+    } else {
+        root.join("users").join(name).join("engine")
+    };
     std::fs::create_dir_all(&dir).ok()?;
     Some(dir)
 }

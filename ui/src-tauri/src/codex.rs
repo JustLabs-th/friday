@@ -154,10 +154,10 @@ pub async fn codex_connect(app: AppHandle, bridge: State<'_, Bridge>) -> Result<
     // Signed in to the company gateway: point this Liam run at it (nothing is written to ~/.codex).
     if let Some((args, key)) = crate::gateway_auth::codex_launch(&app) {
         command.args(args).env(crate::gateway_auth::GATEWAY_KEY_ENV, key);
-        if let Some(home) = crate::gateway_auth::user_home(&app) {
-            command.env("CODEX_HOME", home);
-        }
     }
+    // Liam's own engine folder, never the user's ~/.codex (their personal Codex sessions stay untouched).
+    let home = crate::gateway_auth::user_home(&app).ok_or("Cannot create Liam's data folder")?;
+    command.env("CODEX_HOME", home);
     // Packages come from the company Nexus (curated), not the internet. These are read by npm,
     // pnpm, yarn and pip, so whatever the agent installs in a project goes through it.
     command
