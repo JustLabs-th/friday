@@ -32,6 +32,8 @@ fn main() {
             scheduler::scheduler_run,
             scheduler::scheduler_stop,
             skills::skill_save,
+            trust::trust_status,
+            trust::trust_install,
             gateway_auth::gateway_status,
             gateway_auth::gateway_login,
             gateway_auth::gateway_logout,

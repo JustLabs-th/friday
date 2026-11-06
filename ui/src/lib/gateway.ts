@@ -17,9 +17,29 @@ export async function gatewayStatus(): Promise<GatewayStatus> {
   return isTauri() ? invoke<GatewayStatus>('gateway_status') : signedOut;
 }
 
+interface BrowserTrust {
+  available: boolean;
+  trusted: boolean;
+}
+
+/**
+ * Sign-in happens in the system browser, which only trusts the company certificate if Windows does.
+ * Installs it for this user (no administrator rights; Windows asks the person to confirm). Never
+ * blocks sign-in: if it is declined the browser just shows its usual warning.
+ */
+async function trustCompanyCertificate(): Promise<void> {
+  try {
+    const trust = await invoke<BrowserTrust>('trust_status');
+    if (trust.available && !trust.trusted) await invoke<BrowserTrust>('trust_install');
+  } catch {
+    /* continue without it */
+  }
+}
+
 /** Opens the browser for SSO and resolves once the key is stored. Rejects with a readable message. */
 export async function gatewayLogin(): Promise<GatewayStatus> {
   if (!isTauri()) throw new Error('Sign-in works in the Liam desktop app only.');
+  await trustCompanyCertificate();
   const status = await invoke<GatewayStatus>('gateway_login');
   window.dispatchEvent(new Event(CHANGED));
   return status;

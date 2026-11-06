@@ -58,6 +58,11 @@ export function GatewayAccount({ onChanged }: { onChanged?: () => void }) {
           {error}
         </p>
       )}
+      {!signedIn && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          ครั้งแรก Windows อาจถามให้ยืนยันใบรับรองของบริษัท ให้กด Yes เพื่อให้เบราว์เซอร์ไม่ขึ้นคำเตือน
+        </p>
+      )}
       <p className="mt-2 text-xs text-muted-foreground">
         การออก key ใหม่จะทำให้ key เดิมของคุณในแอปอื่น (เช่น meshroom-ai) ใช้ไม่ได้ ต้องล็อกอินแอปนั้นใหม่
       </p>
