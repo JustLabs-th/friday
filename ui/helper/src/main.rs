@@ -15,16 +15,37 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-/// Only the names Liam uses. Edit here to add more.
+/// The company service names and where they live (the list the platform team maintains).
 const RECORDS: &[(&str, &str)] = &[
     ("sso.digitalx.srt", "192.168.100.3"),
-    ("bifrost.digitalx.srt", "192.168.100.9"),
-    ("key-portal.digitalx.srt", "192.168.100.9"),
-    ("coolify.digitalx.srt", "192.168.100.9"),
     ("home.digitalx.srt", "192.168.100.9"),
+    ("coolify.digitalx.srt", "192.168.100.9"),
+    ("key-portal.digitalx.srt", "192.168.100.9"),
+    ("bifrost.digitalx.srt", "192.168.100.9"),
+    ("ragflow.digitalx.srt", "192.168.100.9"),
     ("git.digitalx.srt", "192.168.100.7"),
     ("nexus.digitalx.srt", "192.168.100.24"),
     ("registry.digitalx.srt", "192.168.100.24"),
+    ("ai.dxfa.srt", "192.168.100.9"),
+    ("backend.dxfa.srt", "192.168.100.9"),
+    ("iam.dxfa.srt", "192.168.100.9"),
+    ("llm.dxfa.srt", "192.168.100.9"),
+    ("tianyan.ai", "192.168.100.9"),
+    ("digitaltransformation-fa.srt", "192.168.100.9"),
+    ("backend.digitaltransformation-fa.srt", "192.168.100.9"),
+    ("test.digitaltransformation-fa.srt", "192.168.100.9"),
+    ("peeko.ai", "192.168.100.9"),
+    ("admin-digitaltransformation-fa.srt", "192.168.100.9"),
+    ("git.dxfa.srt", "192.168.100.7"),
+    ("git.digitaltransformation-fa.srt", "192.168.100.7"),
+    ("registry.dxfa.srt", "192.168.100.24"),
+    ("registry.digitaltransformation-fa.srt", "192.168.100.24"),
+    ("db.tianyan.ai", "192.168.100.4"),
+    ("core.tianyan.ai", "192.168.100.5"),
+    ("frontend.digitaltransformation-fa.srt", "192.168.100.6"),
+    ("nas.tianyan.ai", "192.168.100.10"),
+    ("agent.tianyan.ai", "192.168.100.13"),
+    ("lot.digitaltransformation-fa.srt", "192.168.100.14"),
 ];
 const BEGIN: &str = "# >>> Liam company hosts (managed by the Liam installer)";
 const END: &str = "# <<< Liam company hosts";
