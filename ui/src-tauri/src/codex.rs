@@ -130,22 +130,18 @@ pub async fn codex_connect(app: AppHandle, bridge: State<'_, Bridge>) -> Result<
     }
     disconnect(&bridge).await;
     let binary = executable();
-    // Development keeps the source checkout as the default project; an installed Liam uses a folder
-    // in the user's Documents so it never depends on where it was built.
-    let cwd = if cfg!(debug_assertions) {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .canonicalize()
-            .map_err(|e| e.to_string())?
-    } else {
-        let dir = app
+    // The default project is a folder in the user's Documents, in development too, so it behaves like an
+    // installed Liam (the source checkout is a Git repo that is not on the company Git server, which
+    // would make saving work to Gitea skip). `LIAM_PROJECT_DIR` overrides it for a developer who wants to.
+    let cwd = match std::env::var_os("LIAM_PROJECT_DIR").map(PathBuf::from).filter(|p| p.is_absolute()) {
+        Some(dir) => dir,
+        None => app
             .path()
             .document_dir()
             .map_err(|e| e.to_string())?
-            .join("Liam");
-        std::fs::create_dir_all(&dir).map_err(|e| format!("Cannot create {}: {e}", dir.display()))?;
-        dir
+            .join("Liam"),
     };
+    std::fs::create_dir_all(&cwd).map_err(|e| format!("Cannot create {}: {e}", cwd.display()))?;
     let cwd_text = cwd
         .to_string_lossy()
         .trim_start_matches("\\\\?\\")

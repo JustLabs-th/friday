@@ -31,7 +31,7 @@ export interface Message {
   /** Commands the assistant asked permission to run. */
   confirmations?: ConfirmationRequest[];
   /** Where the turn's changes were saved (the company Git server), once that has happened. */
-  publish?: { status: 'saved' | 'open' | 'error'; message: string; url?: string };
+  publish?: { status: 'saved' | 'open' | 'skipped' | 'error'; message: string; url?: string };
 }
 
 interface ChatViewProps {

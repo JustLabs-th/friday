@@ -19,7 +19,7 @@ export interface McpServer {
 }
 interface RawMcpServer { name: string; runtimeStatus?: string | null; authStatus: string; httpOrigin?: string | null; tools?: Record<string, unknown>; toolsError?: string | null }
 /** What happened when the turn's changes were saved to the company Git server. */
-export interface PublishNote { status: 'saved' | 'open' | 'error'; message: string; url?: string }
+export interface PublishNote { status: 'saved' | 'open' | 'skipped' | 'error'; message: string; url?: string }
 export interface Connector { id: string; name: string; description?: string; logoUrl?: string; connected: boolean; enabled: boolean }
 interface RawApp { id: string; name: string; description?: string | null; logoUrl?: string | null; isAccessible: boolean; isEnabled: boolean }
 export interface CodexThread { id: string; name?: string | null; preview: string; cwd: string; updatedAt?: number; turns?: WireTurn[] }
@@ -256,8 +256,8 @@ class CodexClient {
 
   /**
    * After a turn finishes, saves its changes to the company Git server (commit, pull request, merge).
-   * People never have to touch git; the result is shown under the reply. Quiet when there is nothing
-   * to save or Gitea is not connected.
+   * People never have to touch git; the result is shown under the reply. Quiet only when there is
+   * nothing to save; otherwise it says what happened or why nothing was saved.
    */
   private async saveWork(threadId: string, turnId: string) {
     const thread = this.snapshot.threads[threadId];
@@ -266,7 +266,8 @@ class CodexClient {
     const request = (turn.items.find(item => item.type === 'userMessage')?.content || []).find(input => input.type === 'text')?.text || thread.name || thread.preview || 'Update';
     try {
       const result = await invoke<{ status: string; message: string; url?: string | null }>('publish_changes', { cwd: thread.cwd, summary: request });
-      if (result.status !== 'saved' && result.status !== 'open' && result.status !== 'error') return;
+      // Say why when nothing was saved (not connected, not on the company Git server); stay quiet only when there was nothing to save.
+      if (result.status !== 'saved' && result.status !== 'open' && result.status !== 'skipped' && result.status !== 'error') return;
       turn.publish = { status: result.status, message: result.message, url: result.url || undefined };
     } catch (error) {
       turn.publish = { status: 'error', message: `บันทึกงานขึ้น Gitea ไม่สำเร็จ: ${String(error)}` };
