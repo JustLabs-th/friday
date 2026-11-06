@@ -1,10 +1,10 @@
 ; Extra steps for the Liam installer: trust the company CA and set the company host names.
-; The installer runs per machine (administrator), which both steps need.
+; The installer runs per machine (administrator), which both steps need. The work is done by
+; liam-setup.exe (a plain program) because endpoint protection on company PCs blocks PowerShell.
 
 !macro NSIS_HOOK_POSTINSTALL
   DetailPrint "Setting up the company network (certificate and host names)..."
-  ; Capture the script's output so a failure can say why. The script also logs to $INSTDIR\installer.
-  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\installer\network.ps1" -Action install'
+  nsExec::ExecToStack '"$INSTDIR\installer\liam-setup.exe" install'
   Pop $0
   Pop $1
   DetailPrint "Company network setup exit code: $0 $1"
@@ -14,6 +14,6 @@
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL
-  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\installer\network.ps1" -Action uninstall'
+  nsExec::ExecToLog '"$INSTDIR\installer\liam-setup.exe" uninstall'
   Pop $0
 !macroend
