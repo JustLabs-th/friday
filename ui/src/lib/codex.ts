@@ -113,18 +113,43 @@ function renderTurns(turns: Turn[]): Message[] {
   });
 }
 
+const ENGINE_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+const MAX_IMAGE_SIDE = 2048;
+
+function readDataUrl(file: Blob, name: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error(`อ่าน ${name} ไม่สำเร็จ`));
+    reader.readAsDataURL(file);
+  });
+}
+
+/** The engine only decodes PNG, JPEG, GIF and WebP. Anything else the browser can show (AVIF, BMP, SVG,
+ *  HEIC on some systems) is redrawn as PNG first, and big images are scaled down. Falls back to the original. */
+async function imageUrl(file: File): Promise<string> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_IMAGE_SIDE / Math.max(bitmap.width, bitmap.height));
+    const supported = ENGINE_IMAGE_TYPES.includes(file.type);
+    if (supported && scale === 1) { bitmap.close(); return readDataUrl(file, file.name); }
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    return canvas.toDataURL('image/png');
+  } catch {
+    return readDataUrl(file, file.name);
+  }
+}
+
 async function inputs(text: string, files: File[]): Promise<Input[]> {
   const result: Input[] = [{ type: 'text', text }];
   for (const file of files) {
     if (file.size > 10 * 1024 * 1024) throw new Error(`${file.name}: รองรับไฟล์ขนาดไม่เกิน 10 MB`);
     if (file.type.startsWith('image/')) {
-      const url = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(new Error(`อ่าน ${file.name} ไม่สำเร็จ`));
-        reader.readAsDataURL(file);
-      });
-      result.push({ type: 'image', url });
+      result.push({ type: 'image', url: await imageUrl(file) });
     } else {
       let content: string;
       try { content = new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer()); }
