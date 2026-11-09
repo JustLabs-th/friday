@@ -69,6 +69,30 @@ async fn tool(name: &str, arguments: Value) -> Result<Value, String> {
     Ok(serde_json::from_str(&text).unwrap_or(Value::String(text)))
 }
 
+/// The container labels Coolify would give the app, plus the company sign-in in front of it (the
+/// `liam-auth` middleware of the oauth2-proxy on the Coolify host). Coolify keeps these as given, so
+/// they must be complete. Sent base64 encoded. `LIAM_APP_AUTH=off` leaves an app open.
+fn labels(app_uuid: &str, host: &str) -> String {
+    let router = format!("http-0-{app_uuid}");
+    let guard = std::env::var("LIAM_APP_AUTH").map(|v| !v.eq_ignore_ascii_case("off")).unwrap_or(true);
+    let middlewares = if guard { "gzip-sse,liam-auth" } else { "gzip-sse" };
+    let text = [
+        "traefik.enable=true".to_string(),
+        "coolify.managed=true".to_string(),
+        format!("coolify.applicationUuid={app_uuid}"),
+        "coolify.type=application".to_string(),
+        "traefik.http.middlewares.gzip-sse.compress.excludedcontenttypes=text/event-stream".to_string(),
+        "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https".to_string(),
+        format!("traefik.http.routers.{router}.entryPoints=http"),
+        format!("traefik.http.routers.{router}.middlewares={middlewares}"),
+        format!("traefik.http.routers.{router}.rule=Host(`{host}`) && PathPrefix(`/`)"),
+        format!("traefik.http.routers.{router}.service={router}"),
+        format!("traefik.http.services.{router}.loadbalancer.server.port={PORT}"),
+    ]
+    .join("\n");
+    base64::Engine::encode(&base64::engine::general_purpose::STANDARD, text.as_bytes())
+}
+
 /// A plain app icon carried inside the address itself: the dashboard's own icon library lives on a CDN
 /// that this network cannot reach, and an app's own /icon.svg only exists when the project has one.
 /// LIAM_APP_ICON (any address the users' browsers can open) replaces it.
@@ -84,6 +108,16 @@ async fn create_tile(name: &str, repo: &str, url: &str) -> Result<Value, String>
     match tool("Homarr-app_create", make(icon())).await {
         Ok(created) => Ok(created),
         Err(_) => tool("Homarr-app_create", make(format!("{url}/icon.svg"))).await,
+    }
+}
+
+/// The first string value of `field` found in `value` at any depth.
+fn find_string(value: &Value, field: &str) -> Option<String> {
+    match value {
+        Value::Object(map) => map.get(field).and_then(Value::as_str).map(str::to_string).or_else(|| map.values().find_map(|inner| find_string(inner, field))),
+        Value::Array(items) => items.iter().find_map(|inner| find_string(inner, field)),
+        Value::String(raw) => serde_json::from_str::<Value>(raw).ok().and_then(|parsed| find_string(&parsed, field)),
+        _ => None,
     }
 }
 
@@ -211,6 +245,9 @@ pub async fn run(arguments: &Value, dir: &Path) -> Result<String, String> {
         return Err("This folder is not a deployable project (no Dockerfile or package.json). Create the project first.".into());
     }
 
+    // 0. A project made long ago still gets the platform's newest sign-in files (before the work is saved).
+    let refreshed = crate::platform_tools::refresh_platform(dir).await.unwrap_or_default();
+
     // 1. The newest work must be on the Git server first.
     let saved = crate::publish::publish_changes(app.clone(), dir.to_string_lossy().to_string(), "Deploy".into()).await?;
     if saved.status == "error" || saved.status == "skipped" || saved.status == "open" {
@@ -262,7 +299,7 @@ pub async fn run(arguments: &Value, dir: &Path) -> Result<String, String> {
             // An application made earlier may have the wrong address; make sure it points at the repository.
             tool(
                 "Coolify-manage_application",
-                json!({"action": "update", "uuid": uuid, "data": {"git_repository": ssh_remote(&repo), "git_branch": "main"}}),
+                json!({"action": "update", "uuid": uuid, "data": {"git_repository": ssh_remote(&repo), "git_branch": "main", "custom_labels": labels(&uuid, &format!("{name}.{SUFFIX}"))}}),
             )
             .await?;
             tool("Coolify-deploy", json!({"uuid": uuid})).await?;
@@ -284,11 +321,14 @@ pub async fn run(arguments: &Value, dir: &Path) -> Result<String, String> {
                     "project_uuid": project_uuid, "environment_name": environment, "server_uuid": server_uuid,
                     "private_key_uuid": key_uuid, "git_repository": ssh_remote(&repo), "git_branch": "main",
                     "build_pack": "dockerfile", "ports_exposes": PORT, "name": name, "domains": url,
-                    "instant_deploy": true,
+                    "instant_deploy": false,
                 }}),
             )
             .await?;
             let uuid = text(&created, &["data", "uuid"]).or_else(|| text(&created, &["uuid"])).ok_or("Coolify did not return the application it created.")?.to_string();
+            // Labels first (they carry the sign-in), then the first build.
+            tool("Coolify-manage_application", json!({"action": "update", "uuid": uuid, "data": {"custom_labels": labels(&uuid, &format!("{name}.{SUFFIX}"))}})).await?;
+            tool("Coolify-deploy", json!({"uuid": uuid})).await?;
             (uuid, true)
         }
     };
@@ -303,7 +343,15 @@ pub async fn run(arguments: &Value, dir: &Path) -> Result<String, String> {
         Some(id) => {
             // A redeploy refreshes the entry (an earlier run may have left an icon that does not load).
             let wanted = icon();
-            match tool("Homarr-app_update", json!({"id": id, "name": name, "iconUrl": wanted, "href": url})).await {
+            // The dashboard wants every field in an update, so keep what the entry already has.
+            let current = tool("Homarr-app_byId", json!({"id": id})).await.unwrap_or(Value::Null);
+            let keep = |field: &str, fallback: String| find_string(&current, field).unwrap_or(fallback);
+            let update = json!({
+                "id": id, "name": name, "iconUrl": wanted, "href": url,
+                "description": keep("description", format!("Created with Liam ({repo})")),
+                "pingUrl": keep("pingUrl", String::new()),
+            });
+            match tool("Homarr-app_update", update).await {
                 Err(error) => icon_note = format!(" The dashboard would not take the new icon: {error}"),
                 Ok(answer) => {
                     // Say what really happened: read the entry back and compare.
@@ -330,7 +378,7 @@ pub async fn run(arguments: &Value, dir: &Path) -> Result<String, String> {
     let tile = place_on_board(&app_id, &name).await;
 
     Ok(format!(
-        "{} {name}. Address: {url} ({tile}). Status: {status}.{icon_note} If the address does not open from this computer, the name {name}.{SUFFIX} may not be set up on it yet (application {app_uuid}).",
+        "{} {name}. Address: {url} ({tile}). Status: {status}.{icon_note} {refreshed} If the address does not open from this computer, the name {name}.{SUFFIX} may not be set up on it yet (application {app_uuid}).",
         if created { "Created and deployed" } else { "Redeployed" }
     ))
 }

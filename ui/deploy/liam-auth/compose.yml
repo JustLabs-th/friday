@@ -1,0 +1,64 @@
+# Single sign-in in front of every app Liam deploys: one oauth2-proxy, called by Traefik (ForwardAuth).
+# Lives on the Coolify host (192.168.100.15) in /home/jmadmin/liam-auth, next to a .env that holds the secrets:
+#   OAUTH2_PROXY_CLIENT_SECRET=<the secret of the Keycloak client "liam-apps">
+#   OAUTH2_PROXY_COOKIE_SECRET=<32 random bytes, base64>
+#
+# An app opts in by carrying one label:  traefik.http.routers.<its router>.middlewares=liam-auth
+# (Liam-deploy_project adds it). Behind the proxy the app receives X-Auth-Request-User, -Email,
+# -Preferred-Username and -Groups; the app must be reachable only through Traefik.
+services:
+  liam-oauth2-proxy:
+    image: registry.digitalx.srt/oauth2-proxy:v7.12.0
+    container_name: liam-oauth2-proxy
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      OAUTH2_PROXY_PROVIDER: keycloak-oidc
+      OAUTH2_PROXY_OIDC_ISSUER_URL: https://sso.digitalx.srt/auth/realms/srt
+      OAUTH2_PROXY_CLIENT_ID: liam-apps
+      OAUTH2_PROXY_REDIRECT_URL: http://auth.apps.digitalx.srt/oauth2/callback
+      OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
+      OAUTH2_PROXY_EMAIL_DOMAINS: "*"
+      OAUTH2_PROXY_CODE_CHALLENGE_METHOD: S256
+      OAUTH2_PROXY_OIDC_GROUPS_CLAIM: groups
+      OAUTH2_PROXY_SCOPE: openid email profile
+      OAUTH2_PROXY_COOKIE_DOMAINS: .apps.digitalx.srt
+      # the apps, and the company sign-in (sign-out ends there)
+      OAUTH2_PROXY_WHITELIST_DOMAINS: .apps.digitalx.srt,sso.digitalx.srt
+      OAUTH2_PROXY_COOKIE_NAME: _liam_auth
+      # http for now; set to true when the apps are served over https
+      OAUTH2_PROXY_COOKIE_SECURE: "false"
+      OAUTH2_PROXY_REVERSE_PROXY: "true"
+      OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
+      # the person's ID token goes to the app as "Authorization: Bearer ...", so the app can read every claim
+      # (name, employee id, ...) with getUser() from lib/user.ts
+      OAUTH2_PROXY_SET_AUTHORIZATION_HEADER: "true"
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
+      OAUTH2_PROXY_UPSTREAMS: static://202
+      OAUTH2_PROXY_PROVIDER_CA_FILES: /certs/srt-platform-root-ca.crt
+    volumes:
+      - ./srt-platform-root-ca.crt:/certs/srt-platform-root-ca.crt:ro
+    networks:
+      - coolify
+    labels:
+      - traefik.enable=true
+      # the sign-in address
+      - traefik.http.routers.liam-auth.rule=Host(`auth.apps.digitalx.srt`)
+      - traefik.http.routers.liam-auth.entrypoints=http
+      - traefik.http.routers.liam-auth.service=liam-oauth2-proxy
+      - traefik.http.services.liam-oauth2-proxy.loadbalancer.server.port=4180
+      # Step 1, the gate: Traefik asks the proxy about the page itself. Signed in: the proxy answers 202 and the
+      # request goes on. Not signed in: Traefik hands the browser the proxy's own 302 to the company sign-in,
+      # with the page they asked for as the way back.
+      - traefik.http.middlewares.liam-auth-gate.forwardauth.address=http://liam-oauth2-proxy:4180
+      - traefik.http.middlewares.liam-auth-gate.forwardauth.trustForwardHeader=true
+      # Step 2, who: only reached when signed in; fills the headers the app reads (name, groups, token).
+      - traefik.http.middlewares.liam-auth-who.forwardauth.address=http://liam-oauth2-proxy:4180/oauth2/auth
+      - traefik.http.middlewares.liam-auth-who.forwardauth.trustForwardHeader=true
+      - traefik.http.middlewares.liam-auth-who.forwardauth.authResponseHeaders=X-Auth-Request-User,X-Auth-Request-Email,X-Auth-Request-Preferred-Username,X-Auth-Request-Groups,Authorization
+      # what apps reference
+      - traefik.http.middlewares.liam-auth.chain.middlewares=liam-auth-gate,liam-auth-who
+
+networks:
+  coolify:
+    external: true
