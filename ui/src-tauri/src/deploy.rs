@@ -19,7 +19,7 @@ const SUFFIX: &str = "apps.digitalx.srt";
 const SCHEME: &str = "http";
 const PORT: &str = "3000";
 const GIT_HOST: &str = "git.digitalx.srt";
-const GIT_SSH_PORT: &str = "22";
+const GIT_SSH_PORT: &str = "2222";
 
 /// How Coolify reaches the repository over SSH. By address rather than name, because the containers on
 /// the Coolify server may not resolve the company names. The port is always written out: without it a
@@ -67,6 +67,64 @@ async fn tool(name: &str, arguments: Value) -> Result<Value, String> {
         return Err(format!("{name}: {}", text.chars().take(400).collect::<String>()));
     }
     Ok(serde_json::from_str(&text).unwrap_or(Value::String(text)))
+}
+
+/// A plain app icon carried inside the address itself: the dashboard's own icon library lives on a CDN
+/// that this network cannot reach, and an app's own /icon.svg only exists when the project has one.
+/// LIAM_APP_ICON (any address the users' browsers can open) replaces it.
+const DEFAULT_ICON: &str = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232563eb'/%3E%3Cpath d='M18 24h28M18 32h28M18 40h16' stroke='white' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E";
+
+fn icon() -> String {
+    std::env::var("LIAM_APP_ICON").ok().filter(|v| !v.trim().is_empty()).unwrap_or_else(|| DEFAULT_ICON.to_string())
+}
+
+/// Create the dashboard app entry; if the dashboard refuses the default icon, retry with the app's own.
+async fn create_tile(name: &str, repo: &str, url: &str) -> Result<Value, String> {
+    let make = |icon_url: String| json!({"name": name, "description": format!("Created with Liam ({repo})"), "iconUrl": icon_url, "href": url, "pingUrl": ""});
+    match tool("Homarr-app_create", make(icon())).await {
+        Ok(created) => Ok(created),
+        Err(_) => tool("Homarr-app_create", make(format!("{url}/icon.svg"))).await,
+    }
+}
+
+/// The id of the first object in `value` (at any depth) whose "name" is `name`.
+fn find_id(value: &Value, name: &str) -> Option<String> {
+    match value {
+        Value::Object(map) => {
+            if map.get("name").and_then(Value::as_str) == Some(name) {
+                if let Some(id) = map.get("id").and_then(Value::as_str) {
+                    return Some(id.to_string());
+                }
+            }
+            map.values().find_map(|inner| find_id(inner, name))
+        }
+        Value::Array(items) => items.iter().find_map(|inner| find_id(inner, name)),
+        Value::String(raw) => serde_json::from_str::<Value>(raw).ok().and_then(|parsed| find_id(&parsed, name)),
+        _ => None,
+    }
+}
+
+/// Put the app's tile on the company dashboard board (the board named by LIAM_HOMARR_BOARD, else
+/// "srt-board", else the first board). Answers in words for the report; never fails the deploy.
+async fn place_on_board(app_id: &str, name: &str) -> String {
+    let wanted = std::env::var("LIAM_HOMARR_BOARD").unwrap_or_else(|_| "srt-board".into());
+    let boards = match tool("Homarr-board_getAllBoards", json!({})).await {
+        Ok(boards) => boards,
+        Err(error) => return format!("in the dashboard's app list, but the boards could not be read: {error}"),
+    };
+    let Some(board_id) = find_id(&boards, &wanted) else {
+        return format!("in the dashboard's app list, but the board \"{wanted}\" was not found");
+    };
+    // Already on the board? (a redeploy must not add a second tile)
+    if let Ok(board) = tool("Homarr-board_getBoardByName", json!({"name": wanted})).await {
+        if board.to_string().contains(app_id) {
+            return "already on the dashboard".into();
+        }
+    }
+    match tool("Homarr-board_addItem", json!({"boardId": board_id, "kind": "app", "options": {"appId": app_id, "openInNewTab": true}})).await {
+        Ok(_) => "added to the dashboard".into(),
+        Err(error) => format!("in the dashboard's app list, but it could not be placed on the board \"{wanted}\" (add {name} from the board's edit mode): {error}"),
+    }
 }
 
 fn text<'a>(value: &'a Value, path: &[&str]) -> Option<&'a str> {
@@ -239,21 +297,40 @@ pub async fn run(arguments: &Value, dir: &Path) -> Result<String, String> {
     let status = wait_for_build(&app_uuid).await?;
 
     // 5. A tile on the dashboard people open applications from (once).
-    let tile = match tool("Homarr-app_search", json!({"query": name, "limit": 20})).await {
-        Ok(found) if found.to_string().contains(&format!("\"{name}\"")) => "already on the dashboard",
-        _ => match tool(
-            "Homarr-app_create",
-            json!({"name": name, "description": format!("Created with Liam ({repo})"), "iconUrl": format!("{url}/icon.svg"), "href": url, "pingUrl": ""}),
-        )
-        .await
-        {
-            Ok(_) => "added to the dashboard",
+    let mut icon_note = String::new();
+    let listed = tool("Homarr-app_search", json!({"query": name, "limit": 20})).await;
+    let app_id = match listed.as_ref().ok().and_then(|found| find_id(found, &name)) {
+        Some(id) => {
+            // A redeploy refreshes the entry (an earlier run may have left an icon that does not load).
+            let wanted = icon();
+            match tool("Homarr-app_update", json!({"id": id, "name": name, "iconUrl": wanted, "href": url})).await {
+                Err(error) => icon_note = format!(" The dashboard would not take the new icon: {error}"),
+                Ok(answer) => {
+                    // Say what really happened: read the entry back and compare.
+                    let stored = tool("Homarr-app_byId", json!({"id": id})).await.map(|v| v.to_string()).unwrap_or_default();
+                    let head: String = wanted.chars().take(24).collect();
+                    if !stored.contains(&head) {
+                        icon_note = format!(" The dashboard answered the icon update but still shows the old icon (answer: {}).", answer.to_string().chars().take(200).collect::<String>());
+                    }
+                }
+            }
+            id
+        }
+        None => match create_tile(&name, &repo, &url).await {
+            Ok(created_app) => match find_id(&created_app, &name).or_else(|| text(&created_app, &["id"]).map(String::from)) {
+                Some(id) => id,
+                None => match tool("Homarr-app_search", json!({"query": name, "limit": 20})).await.ok().and_then(|found| find_id(&found, &name)) {
+                    Some(id) => id,
+                    None => return Ok(format!("Deployed, but the dashboard tile could not be found after creating it. Address: {url}")),
+                },
+            },
             Err(error) => return Ok(format!("Deployed, but the dashboard tile failed: {error}")),
         },
     };
+    let tile = place_on_board(&app_id, &name).await;
 
     Ok(format!(
-        "{} {name}. Address: {url} ({tile}). Status: {status}. If the address does not open from this computer, the name {name}.{SUFFIX} may not be set up on it yet (application {app_uuid}).",
+        "{} {name}. Address: {url} ({tile}). Status: {status}.{icon_note} If the address does not open from this computer, the name {name}.{SUFFIX} may not be set up on it yet (application {app_uuid}).",
         if created { "Created and deployed" } else { "Redeployed" }
     ))
 }
@@ -261,6 +338,14 @@ pub async fn run(arguments: &Value, dir: &Path) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn finds_an_id_by_name_at_any_depth() {
+        let answer = json!({"data": [{"id": "a1", "name": "other"}, {"id": "b2", "name": "work-logs"}]});
+        assert_eq!(find_id(&answer, "work-logs").as_deref(), Some("b2"));
+        assert_eq!(find_id(&Value::String("[{\"id\":\"c3\",\"name\":\"x\"}]".into()), "x").as_deref(), Some("c3"));
+        assert_eq!(find_id(&answer, "missing"), None);
+    }
 
     #[test]
     fn a_deploy_key_pair_is_made_and_the_files_are_removed() {
@@ -273,7 +358,7 @@ mod tests {
     #[test]
     fn the_ssh_address_always_has_a_port_so_a_numeric_owner_is_not_read_as_one() {
         std::env::set_var("LIAM_GITEA_SSH_HOST", "192.168.100.7");
-        assert_eq!(ssh_remote("015298/work-logs"), "git@192.168.100.7:22/015298/work-logs.git");
+        assert_eq!(ssh_remote("015298/work-logs"), "git@192.168.100.7:2222/015298/work-logs.git");
         std::env::remove_var("LIAM_GITEA_SSH_HOST");
     }
 

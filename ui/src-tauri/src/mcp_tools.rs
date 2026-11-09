@@ -27,7 +27,8 @@ const CLIENTS: &[(&str, &[&str])] = &[
         "Homarr",
         &[
             "app_all", "app_search", "app_byId", "app_create", "app_update", "icon_findIcons",
-            "icon_detectFavicon", "board_getAllBoards", "board_search", "integration_all",
+            "icon_detectFavicon", "board_getAllBoards", "board_search", "board_getBoardByName",
+            "board_addItem", "integration_all",
         ],
     ),
 ];
