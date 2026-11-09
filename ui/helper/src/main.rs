@@ -3,10 +3,12 @@
 //! PowerShell. Liam trusts the company root CA inside the app, so the Windows certificate store is
 //! only touched when asked (`--with-ca`, for browsers on that PC).
 //!
-//!   liam-setup install   [--hosts <file>] [--with-ca [--ca <file>]]
+//!   liam-setup install   [--hosts <file>] [--with-ca [--ca <file>]] [--dns <ip> | --no-dns]
 //!   liam-setup uninstall [--hosts <file>]
 //!
-//! Safe to run again. `uninstall` removes only the hosts block; a CA that was added stays because
+//! `install` also adds a DNS rule so names under digitalx.srt (the apps Liam puts online have wildcard names a
+//! hosts file cannot hold) are asked of the company DNS server; nothing else about the PC's DNS changes.
+//! Safe to run again. `uninstall` removes the hosts block and that rule; a CA that was added stays because
 //! other company tools rely on it. A log is written next to this program.
 use std::{
     fs,
@@ -124,6 +126,42 @@ fn run(program: &str, args: &[&str]) -> Result<(), String> {
     Err(format!("{program} failed ({}): {}", output.status, text.trim()))
 }
 
+/// The company DNS server (Technitium). It answers the company's own names, including every app Liam puts
+/// online (`<name>.apps.digitalx.srt`), which a hosts file cannot do because it has no wildcards.
+const COMPANY_DNS: &str = "192.168.100.9";
+const NRPT_KEY: &str = r"HKLM\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient\DnsPolicyConfig\{6c1a0e2a-7b1f-4d55-9e3a-114a5c0e0001}";
+
+/// The `reg.exe` calls that make Windows ask `dns` for names under digitalx.srt (a name resolution policy rule).
+/// Only those names are sent there: the PC's own DNS stays in charge of everything else, and the hosts file
+/// is still looked at first, so the listed company names keep working even when that server is away.
+fn dns_rule_commands(dns: &str, add: bool) -> Vec<Vec<String>> {
+    let reg = |parts: &[&str]| parts.iter().map(|p| p.to_string()).collect::<Vec<_>>();
+    if !add {
+        return vec![reg(&["delete", NRPT_KEY, "/f"])];
+    }
+    vec![
+        reg(&["add", NRPT_KEY, "/v", "Name", "/t", "REG_MULTI_SZ", "/d", ".digitalx.srt", "/f"]),
+        reg(&["add", NRPT_KEY, "/v", "Version", "/t", "REG_DWORD", "/d", "2", "/f"]),
+        reg(&["add", NRPT_KEY, "/v", "ConfigOptions", "/t", "REG_DWORD", "/d", "8", "/f"]),
+        reg(&["add", NRPT_KEY, "/v", "GenericDNSServers", "/t", "REG_SZ", "/d", dns, "/f"]),
+    ]
+}
+
+fn apply_dns_rule(dns: &str, add: bool) -> Result<(), String> {
+    for command in dns_rule_commands(dns, add) {
+        let args: Vec<&str> = command.iter().map(String::as_str).collect();
+        // Removing a rule that was never added is fine.
+        if let Err(error) = run("reg.exe", &args) {
+            if add {
+                return Err(error);
+            }
+        }
+    }
+    // Ask the DNS client to read the rule now (best effort; it also reads it at the next start).
+    let _ = run("sc.exe", &["control", "dnscache", "paramchange"]);
+    Ok(())
+}
+
 fn main() {
     let exe_dir = std::env::current_exe()
         .ok()
@@ -147,6 +185,8 @@ fn main() {
     });
     let ca = value("--ca").map(PathBuf::from).unwrap_or_else(|| exe_dir.join("srt-platform-root-ca.crt"));
     let with_ca = args.iter().any(|a| a == "--with-ca");
+    let no_dns = args.iter().any(|a| a == "--no-dns");
+    let dns = value("--dns").unwrap_or_else(|| COMPANY_DNS.to_string());
 
     let result = (|| -> Result<(), String> {
         match action {
@@ -160,10 +200,19 @@ fn main() {
                 }
                 let changed = update_hosts(&hosts, true)?;
                 log(if changed { "hosts updated" } else { "hosts already up to date" });
+                if !no_dns {
+                    // Not fatal: the company names in the hosts file already work without it.
+                    match apply_dns_rule(&dns, true) {
+                        Ok(()) => log(&format!("names under digitalx.srt are asked of {dns}")),
+                        Err(error) => log(&format!("DNS rule not added: {error}")),
+                    }
+                }
             }
             "uninstall" => {
                 update_hosts(&hosts, false)?;
                 log("hosts block removed");
+                let _ = apply_dns_rule(&dns, false);
+                log("DNS rule removed");
             }
             other => return Err(format!("unknown action: {other}")),
         }
@@ -181,6 +230,19 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_dns_rule_covers_only_company_names() {
+        let add = dns_rule_commands("192.168.100.9", true);
+        let text: Vec<String> = add.iter().map(|c| c.join(" ")).collect();
+        assert!(text.iter().any(|c| c.contains("/v Name") && c.contains(".digitalx.srt")));
+        assert!(text.iter().any(|c| c.contains("GenericDNSServers") && c.contains("192.168.100.9")));
+        assert!(text.iter().any(|c| c.contains("ConfigOptions") && c.contains("/d 8")));
+        assert!(text.iter().all(|c| c.contains(r"DnsPolicyConfig\{")), "only the Liam rule is touched");
+        let remove = dns_rule_commands("192.168.100.9", false);
+        assert_eq!(remove.len(), 1);
+        assert_eq!(remove[0][0], "delete");
+    }
 
     #[test]
     fn adds_block_moves_conflicts_and_is_idempotent() {

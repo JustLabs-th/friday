@@ -13,6 +13,7 @@ mod publish;
 mod scheduler;
 mod skills;
 mod template_source;
+mod network;
 mod trust;
 
 /// The company package registry (Nexus).
@@ -55,6 +56,11 @@ fn main() {
             app.manage(scheduler::Scheduler::load(path));
             scheduler::start(app.handle());
             deploy::init(app.handle().clone());
+            // Let this person's browser open the company addresses through their proxy (once, quietly). A
+            // development build leaves the PC alone unless LIAM_NETWORK_FIX is set.
+            if !cfg!(debug_assertions) || std::env::var_os("LIAM_NETWORK_FIX").is_some() {
+                std::thread::spawn(|| eprintln!("network: {}", network::fix_proxy_bypass()));
+            }
             Ok(())
         })
         .build(tauri::generate_context!())
