@@ -309,6 +309,12 @@ export function AppSidebar({
       </SidebarContent>
 
       <SidebarFooter className="p-2">
+        {/* Why the sign-in failed, in words (the message the server or the app gave). */}
+        {!gateway.signedIn && signInError && (
+          <p role="alert" className="max-h-24 overflow-y-auto break-words px-1 text-xs text-destructive group-data-[collapsible=icon]:hidden">
+            {signInError}
+          </p>
+        )}
         <div className="flex items-center justify-between gap-1 group-data-[collapsible=icon]:flex-col">
           {gateway.signedIn ? (
             <div className="flex min-w-0 items-center gap-2 px-2 py-1.5 text-sm group-data-[collapsible=icon]:px-1">
