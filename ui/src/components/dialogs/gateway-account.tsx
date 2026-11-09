@@ -73,44 +73,36 @@ export function GatewayAccount({ onChanged }: { onChanged?: () => void }) {
   const signedIn = status?.signedIn === true;
   return (
     <div className="border-b py-4">
-      <div className="flex items-center justify-between gap-6">
-        <div className="min-w-0">
-          <p className="text-sm font-medium">LLM gateway</p>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {signedIn
-              ? `เข้าสู่ระบบแล้ว${status?.displayName || status?.username ? ` ในชื่อ ${status.displayName || status.username}` : ''}`
-              : 'เข้าสู่ระบบด้วย SSO ของบริษัทเพื่อขอ key สำหรับใช้โมเดลผ่าน gateway'}
+      {signedIn ? (
+        // Signed in: who the person is, and the way out. (No gateway or key wording: it is not for them to manage.)
+        <>
+          <ProfileDetails status={status} loading={busy} onLoad={() => void run(gatewayRefreshProfile)} />
+          <div className="mt-3 flex justify-end">
+            <Button variant="outline" size="sm" disabled={busy} onClick={() => void run(gatewayLogout)}>
+              <LogOut aria-hidden="true" />
+              ออกจากระบบ
+            </Button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="flex items-center justify-between gap-6">
+            <p className="min-w-0 text-sm text-muted-foreground">เข้าสู่ระบบด้วย SSO ของบริษัทเพื่อใช้โมเดลผ่าน gateway</p>
+            <Button size="sm" disabled={busy || status === null} onClick={() => void run(gatewayLogin)}>
+              <LogIn aria-hidden="true" />
+              {busy ? 'รอการล็อกอินในเบราว์เซอร์…' : 'Login'}
+            </Button>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            ครั้งแรก Windows อาจถามให้ยืนยันใบรับรองของบริษัท ให้กด Yes เพื่อให้เบราว์เซอร์ไม่ขึ้นคำเตือน
           </p>
-          {signedIn && status?.expiresAt && (
-            <p className="mt-0.5 text-xs text-muted-foreground">key หมดอายุ {status.expiresAt}</p>
-          )}
-        </div>
-        {signedIn ? (
-          <Button variant="outline" size="sm" disabled={busy} onClick={() => void run(gatewayLogout)}>
-            <LogOut aria-hidden="true" />
-            ออกจากระบบ
-          </Button>
-        ) : (
-          <Button size="sm" disabled={busy || status === null} onClick={() => void run(gatewayLogin)}>
-            <LogIn aria-hidden="true" />
-            {busy ? 'รอการล็อกอินในเบราว์เซอร์…' : 'Login'}
-          </Button>
-        )}
-      </div>
-      {signedIn && <ProfileDetails status={status} loading={busy} onLoad={() => void run(gatewayRefreshProfile)} />}
+        </>
+      )}
       {error && (
         <p role="alert" className="mt-2 text-sm text-destructive">
           {error}
         </p>
       )}
-      {!signedIn && (
-        <p className="mt-2 text-xs text-muted-foreground">
-          ครั้งแรก Windows อาจถามให้ยืนยันใบรับรองของบริษัท ให้กด Yes เพื่อให้เบราว์เซอร์ไม่ขึ้นคำเตือน
-        </p>
-      )}
-      <p className="mt-2 text-xs text-muted-foreground">
-        การออก key ใหม่จะทำให้ key เดิมของคุณในแอปอื่น (เช่น meshroom-ai) ใช้ไม่ได้ ต้องล็อกอินแอปนั้นใหม่
-      </p>
     </div>
   );
 }
