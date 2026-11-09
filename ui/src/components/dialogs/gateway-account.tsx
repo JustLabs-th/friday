@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { gatewayLogin, gatewayLogout, gatewayRefreshProfile, gatewayStatus, type GatewayProfile, type GatewayStatus } from '@/lib/gateway';
 
@@ -88,7 +87,6 @@ export function GatewayAccount({ onChanged }: { onChanged?: () => void }) {
           <div className="flex items-center justify-between gap-6">
             <p className="min-w-0 text-sm text-muted-foreground">เข้าสู่ระบบด้วย SSO ของบริษัทเพื่อใช้โมเดลผ่าน gateway</p>
             <Button size="sm" disabled={busy || status === null} onClick={() => void run(gatewayLogin)}>
-              <LogIn aria-hidden="true" />
               {busy ? 'รอการล็อกอินในเบราว์เซอร์…' : 'Login'}
             </Button>
           </div>
