@@ -16,6 +16,7 @@ import { ModelSelector } from '@/components/chat/model-selector';
 import { RenameDialog } from '@/components/dialogs/rename-dialog';
 import { SearchDialog } from '@/components/dialogs/search-dialog';
 import { SettingsDialog } from '@/components/dialogs/settings-dialog';
+import { useEngineVersion } from '@/hooks/use-engine-version';
 import { useTheme } from '@/hooks/use-theme';
 import { RightPanel } from '@/components/panels/right-panel';
 import { TerminalPanel } from '@/components/panels/terminal-panel';
@@ -43,6 +44,7 @@ export function App() {
   const { projects, setProjects, activeProjectId, setActiveProjectId, activeProject } = useProjects(engine);
   const model = useModelChoice(engine.models, engine.defaultModel);
   const theme = useTheme();
+  const engineVersion = useEngineVersion(engine.status === 'ready');
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const startingSession = useRef(false);
 
@@ -333,9 +335,7 @@ export function App() {
           onOpenChange={setSettingsOpen}
           theme={theme.mode}
           onSetTheme={theme.choose}
-          engineLabel={engine.status === 'ready' ? 'Connected' : engine.status}
-          enginePath={engine.info?.binary}
-          onReconnect={reconnect}
+          engineVersion={engineVersion}
           onGatewayChanged={() => void codex.restart().catch(codex.report)}
         />
         <NewProjectDialog open={newProjectOpen} onOpenChange={setNewProjectOpen} onCreate={createProject} />

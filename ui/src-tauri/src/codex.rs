@@ -69,6 +69,26 @@ fn executable() -> PathBuf {
     name.into()
 }
 
+/// The engine's own version number (what `liam-engine --version` prints), for the About page.
+#[tauri::command]
+pub async fn engine_version() -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let mut command = std::process::Command::new(executable());
+        command.arg("--version");
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x08000000);
+        }
+        let output = command.output().map_err(|e| format!("The engine did not answer: {e}"))?;
+        let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        // "liam-engine 0.0.0": the number is the last word.
+        text.split_whitespace().last().map(str::to_string).ok_or_else(|| "The engine gave no version.".to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 async fn write(stdin: &Mutex<ChildStdin>, message: &Value) -> Result<(), String> {
     let mut bytes = serde_json::to_vec(message).map_err(|e| e.to_string())?;
     bytes.push(b'\n');

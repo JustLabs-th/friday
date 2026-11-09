@@ -11,9 +11,8 @@ interface SettingsDialogProps {
   onOpenChange: (open: boolean) => void;
   theme: ThemeMode;
   onSetTheme: (theme: ThemeMode) => void;
-  engineLabel?: string;
-  enginePath?: string;
-  onReconnect?: () => void;
+  /** The Liam engine's version number, when known. */
+  engineVersion?: string;
   /** The gateway sign-in changed, so the engine has to restart to pick it up. */
   onGatewayChanged?: () => void;
 }
@@ -37,7 +36,7 @@ interface Section {
   render: (
     props: Pick<
       SettingsDialogProps,
-      'theme' | 'onSetTheme' | 'engineLabel' | 'enginePath' | 'onReconnect' | 'onGatewayChanged'
+      'theme' | 'onSetTheme' | 'engineVersion' | 'onGatewayChanged'
     >,
   ) => ReactNode;
 }
@@ -82,18 +81,13 @@ const sections: Section[] = [
     id: 'about',
     label: 'About',
     icon: Info,
-    render: ({ engineLabel, enginePath, onReconnect }) => (
+    render: ({ engineVersion }) => (
       <>
         <SettingRow label="Version" description="เวอร์ชันของ Liam">
           <span className="text-sm text-muted-foreground">0.1.0</span>
         </SettingRow>
-        <SettingRow label="Liam engine" description={enginePath || 'ใช้ login และ configuration ของ Liam ในเครื่อง'}>
-          <span className="text-sm text-muted-foreground">{engineLabel || 'Not connected'}</span>
-          {onReconnect && (
-            <Button className="ml-2" variant="outline" size="sm" onClick={onReconnect}>
-              Reconnect
-            </Button>
-          )}
+        <SettingRow label="Liam engine" description="เวอร์ชันของ engine">
+          <span className="text-sm text-muted-foreground">{engineVersion || '—'}</span>
         </SettingRow>
       </>
     ),
@@ -105,9 +99,7 @@ export function SettingsDialog({
   onOpenChange,
   theme,
   onSetTheme,
-  engineLabel,
-  enginePath,
-  onReconnect,
+  engineVersion,
   onGatewayChanged,
 }: SettingsDialogProps) {
   const [query, setQuery] = useState('');
@@ -159,7 +151,7 @@ export function SettingsDialog({
           </nav>
           <div className="min-w-0 flex-1 overflow-y-auto p-6">
             <h2 className="mb-2 text-base font-semibold">{active.label}</h2>
-            {active.render({ theme, onSetTheme, engineLabel, enginePath, onReconnect, onGatewayChanged })}
+            {active.render({ theme, onSetTheme, engineVersion, onGatewayChanged })}
           </div>
         </div>
       </DialogContent>

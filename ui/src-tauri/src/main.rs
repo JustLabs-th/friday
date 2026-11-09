@@ -43,6 +43,7 @@ fn main() {
             changes::git_changes,
             trust::trust_status,
             trust::trust_install,
+            codex::engine_version,
             gateway_auth::gateway_status,
             gateway_auth::gateway_login,
             gateway_auth::gateway_refresh_profile,
