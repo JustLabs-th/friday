@@ -16,6 +16,7 @@ import { ModelSelector } from '@/components/chat/model-selector';
 import { RenameDialog } from '@/components/dialogs/rename-dialog';
 import { SearchDialog } from '@/components/dialogs/search-dialog';
 import { SettingsDialog } from '@/components/dialogs/settings-dialog';
+import { useTheme } from '@/hooks/use-theme';
 import { RightPanel } from '@/components/panels/right-panel';
 import { TerminalPanel } from '@/components/panels/terminal-panel';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
@@ -41,7 +42,7 @@ export function App() {
   const panels = usePanels();
   const { projects, setProjects, activeProjectId, setActiveProjectId, activeProject } = useProjects(engine);
   const model = useModelChoice(engine.models, engine.defaultModel);
-  const [dark, setDark] = useState(false);
+  const theme = useTheme();
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const startingSession = useRef(false);
 
@@ -79,10 +80,6 @@ export function App() {
   const connectorsPage = nav.page === 'connectors';
   const sidePage = scheduledPage || connectorsPage;
 
-  function setTheme(next: boolean) {
-    setDark(next);
-    document.documentElement.classList.toggle('dark', next);
-  }
   function selectProject(project: Project) {
     setActiveProjectId(project.id);
     setActiveSessionId(null);
@@ -334,8 +331,8 @@ export function App() {
         <SettingsDialog
           open={settingsOpen}
           onOpenChange={setSettingsOpen}
-          dark={dark}
-          onSetDark={setTheme}
+          theme={theme.mode}
+          onSetTheme={theme.choose}
           engineLabel={engine.status === 'ready' ? 'Connected' : engine.status}
           enginePath={engine.info?.binary}
           onReconnect={reconnect}

@@ -11,6 +11,7 @@ import { Reasoning } from '@/components/chat/reasoning';
 import { SandboxRun } from '@/components/chat/sandbox-run';
 import { SaveSkillDialog } from '@/components/dialogs/save-skill-dialog';
 import { SettingsDialog } from '@/components/dialogs/settings-dialog';
+import { useTheme } from '@/hooks/use-theme';
 import { Sources } from '@/components/chat/sources';
 import { StackTrace } from '@/components/chat/stack-trace';
 import { ActivityLine, TurnSummary } from '@/components/chat/turn-activity';
@@ -93,7 +94,7 @@ function QueueDemo() {
 export function Gallery() {
   const [modelId, setModelId] = useState(models[0].id);
   const [effort, setEffort] = useState<Effort>(models[0].defaultEffort);
-  const [dark, setDark] = useState(false);
+  const theme = useTheme();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [projectOpen, setProjectOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -105,10 +106,6 @@ export function Gallery() {
     state: 'requested',
   });
 
-  function setTheme(next: boolean) {
-    setDark(next);
-    document.documentElement.classList.toggle('dark', next);
-  }
 
   return (
     <TooltipProvider>
@@ -122,8 +119,8 @@ export function Gallery() {
                 ทุก component ที่ใช้ในแอป พร้อมทุกสถานะ (ข้อมูลทั้งหมดเป็นตัวอย่าง)
               </p>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setTheme(!dark)}>
-              {dark ? 'Light' : 'Dark'}
+            <Button variant="outline" size="sm" onClick={() => theme.choose(theme.mode === 'dark' ? 'light' : 'dark')}>
+              {theme.mode === 'dark' ? 'Light' : 'Dark'}
             </Button>
           </header>
 
@@ -451,7 +448,7 @@ export function Gallery() {
           />
         )}
         <NewProjectDialog open={projectOpen} onOpenChange={setProjectOpen} onCreate={() => undefined} />
-        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} dark={dark} onSetDark={setTheme} />
+        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} theme={theme.mode} onSetTheme={theme.choose} />
         <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>

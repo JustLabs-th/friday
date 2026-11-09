@@ -1,15 +1,16 @@
 import { useState, type ReactNode } from 'react';
-import { Info, Moon, Palette, Search, Sun, User, type LucideIcon } from 'lucide-react';
+import { Info, Monitor, Moon, Palette, Search, Sun, User, type LucideIcon } from 'lucide-react';
 import { GatewayAccount } from '@/components/dialogs/gateway-account';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import type { ThemeMode } from '@/hooks/use-theme';
 
 interface SettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  dark: boolean;
-  onSetDark: (dark: boolean) => void;
+  theme: ThemeMode;
+  onSetTheme: (theme: ThemeMode) => void;
   engineLabel?: string;
   enginePath?: string;
   onReconnect?: () => void;
@@ -36,7 +37,7 @@ interface Section {
   render: (
     props: Pick<
       SettingsDialogProps,
-      'dark' | 'onSetDark' | 'engineLabel' | 'enginePath' | 'onReconnect' | 'onGatewayChanged'
+      'theme' | 'onSetTheme' | 'engineLabel' | 'enginePath' | 'onReconnect' | 'onGatewayChanged'
     >,
   ) => ReactNode;
 }
@@ -52,17 +53,27 @@ const sections: Section[] = [
     id: 'appearance',
     label: 'Appearance',
     icon: Palette,
-    render: ({ dark, onSetDark }) => (
-      <SettingRow label="Theme" description="เลือกโหมดสีของแอป">
-        <div className="flex gap-1 rounded-lg bg-muted p-0.5">
-          <Button variant={dark ? 'ghost' : 'outline'} size="sm" aria-pressed={!dark} onClick={() => onSetDark(false)}>
-            <Sun aria-hidden="true" />
-            Light
-          </Button>
-          <Button variant={dark ? 'outline' : 'ghost'} size="sm" aria-pressed={dark} onClick={() => onSetDark(true)}>
-            <Moon aria-hidden="true" />
-            Dark
-          </Button>
+    render: ({ theme, onSetTheme }) => (
+      <SettingRow label="Theme" description="เลือกโหมดสีของแอป หรือให้ตามการตั้งค่าของเครื่อง">
+        <div className="flex gap-1 rounded-lg bg-muted p-0.5" role="group" aria-label="Theme">
+          {(
+            [
+              ['light', 'Light', Sun],
+              ['dark', 'Dark', Moon],
+              ['system', 'System', Monitor],
+            ] as const
+          ).map(([value, label, Icon]) => (
+            <Button
+              key={value}
+              variant={theme === value ? 'outline' : 'ghost'}
+              size="sm"
+              aria-pressed={theme === value}
+              onClick={() => onSetTheme(value)}
+            >
+              <Icon aria-hidden="true" />
+              {label}
+            </Button>
+          ))}
         </div>
       </SettingRow>
     ),
@@ -92,8 +103,8 @@ const sections: Section[] = [
 export function SettingsDialog({
   open,
   onOpenChange,
-  dark,
-  onSetDark,
+  theme,
+  onSetTheme,
   engineLabel,
   enginePath,
   onReconnect,
@@ -148,7 +159,7 @@ export function SettingsDialog({
           </nav>
           <div className="min-w-0 flex-1 overflow-y-auto p-6">
             <h2 className="mb-2 text-base font-semibold">{active.label}</h2>
-            {active.render({ dark, onSetDark, engineLabel, enginePath, onReconnect, onGatewayChanged })}
+            {active.render({ theme, onSetTheme, engineLabel, enginePath, onReconnect, onGatewayChanged })}
           </div>
         </div>
       </DialogContent>
