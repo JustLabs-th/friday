@@ -7,6 +7,20 @@ export interface GatewayStatus {
   /** The person's name from SSO. Prefer it over `username` when showing who is signed in. */
   displayName?: string | null;
   expiresAt?: string | null;
+  /** What the company sign-in says about the person. Absent for a sign-in made before this was kept. */
+  profile?: GatewayProfile | null;
+}
+
+/** The person's details from the company sign-in (display only). Fields the directory does not send are empty. */
+export interface GatewayProfile {
+  name: string;
+  employeeId: string;
+  email: string;
+  factory: string;
+  section: string;
+  department: string;
+  groups: string[];
+  roles: string[];
 }
 
 const signedOut: GatewayStatus = { signedIn: false };

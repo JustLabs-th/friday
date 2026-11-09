@@ -1,7 +1,44 @@
 import { useEffect, useState } from 'react';
 import { LogIn, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { gatewayLogin, gatewayLogout, gatewayStatus, type GatewayStatus } from '@/lib/gateway';
+import { gatewayLogin, gatewayLogout, gatewayStatus, type GatewayProfile, type GatewayStatus } from '@/lib/gateway';
+
+/** The person's details as rows (only the ones the directory sent). */
+function profileRows(profile: GatewayProfile, username?: string | null): [string, string][] {
+  const rows: [string, string][] = [
+    ['Name', profile.name],
+    ['Employee ID', profile.employeeId || username || ''],
+    ['Email', profile.email],
+    ['Factory', profile.factory],
+    ['Section', profile.section],
+    ['Department', profile.department],
+    ['Groups', profile.groups.join(', ')],
+    ['Roles', profile.roles.join(', ')],
+  ];
+  return rows.filter(([, value]) => value.trim() !== '');
+}
+
+/** The signed-in person's details, or a hint to sign in again when this sign-in did not keep them. */
+export function ProfileDetails({ status }: { status: GatewayStatus | null }) {
+  return (
+    <div className="mt-3 rounded-lg border">
+      {status?.profile ? (
+        <dl className="grid grid-cols-[7rem_1fr] gap-x-4 gap-y-1.5 px-4 py-3 text-sm">
+          {profileRows(status.profile, status.username).map(([label, value]) => (
+            <div key={label} className="contents">
+              <dt className="text-muted-foreground">{label}</dt>
+              <dd className="min-w-0 break-words">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p className="px-4 py-3 text-sm text-muted-foreground">
+          Sign out and sign in again to load your details (name, employee ID, section, groups).
+        </p>
+      )}
+    </div>
+  );
+}
 
 /** The Account section of Settings: sign in to the company LLM gateway with SSO. */
 export function GatewayAccount({ onChanged }: { onChanged?: () => void }) {
@@ -53,6 +90,7 @@ export function GatewayAccount({ onChanged }: { onChanged?: () => void }) {
           </Button>
         )}
       </div>
+      {signedIn && <ProfileDetails status={status} />}
       {error && (
         <p role="alert" className="mt-2 text-sm text-destructive">
           {error}

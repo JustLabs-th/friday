@@ -54,6 +54,72 @@ pub struct GatewayStatus {
     /// The person's first Keycloak group (last part of its path), used to file their apps on the dashboard.
     #[serde(default)]
     pub group: Option<String>,
+    /// What the company sign-in says about the person, shown in Settings. Absent for a session made before this existed.
+    #[serde(default)]
+    pub profile: Option<Profile>,
+}
+
+/// The person's details from the sign-in token, for display only (never used to decide access).
+#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Profile {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub employee_id: String,
+    #[serde(default)]
+    pub email: String,
+    #[serde(default)]
+    pub factory: String,
+    #[serde(default)]
+    pub section: String,
+    #[serde(default)]
+    pub department: String,
+    #[serde(default)]
+    pub groups: Vec<String>,
+    #[serde(default)]
+    pub roles: Vec<String>,
+}
+
+fn claim_text(claims: &serde_json::Value, key: &str) -> String {
+    claims.get(key).and_then(|v| v.as_str()).unwrap_or("").trim().to_string()
+}
+
+fn claim_list(value: Option<&serde_json::Value>) -> Vec<String> {
+    value
+        .and_then(|v| v.as_array())
+        .map(|items| items.iter().filter_map(|i| i.as_str()).map(|g| g.trim().trim_end_matches('/').rsplit('/').next().unwrap_or("").trim().to_string()).filter(|g| !g.is_empty()).collect())
+        .unwrap_or_default()
+}
+
+/// The person's details from an ID token (name, employee code, email, factory, section, department, groups, roles).
+pub(crate) fn profile_from_token(id_token: &str) -> Option<Profile> {
+    let payload = id_token.split('.').nth(1)?;
+    let bytes = URL_SAFE_NO_PAD.decode(payload.trim_end_matches('=')).ok()?;
+    let claims: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    let name = {
+        let full = claim_text(&claims, "name");
+        if full.is_empty() {
+            [claim_text(&claims, "given_name"), claim_text(&claims, "family_name")].into_iter().filter(|p| !p.is_empty()).collect::<Vec<_>>().join(" ")
+        } else {
+            full
+        }
+    };
+    let employee_id = [claim_text(&claims, "employee_id"), claim_text(&claims, "employeeId"), claim_text(&claims, "preferred_username")]
+        .into_iter()
+        .find(|v| !v.is_empty())
+        .unwrap_or_default();
+    let department = [claim_text(&claims, "dept"), claim_text(&claims, "department")].into_iter().find(|v| !v.is_empty()).unwrap_or_default();
+    Some(Profile {
+        name,
+        employee_id,
+        email: claim_text(&claims, "email"),
+        factory: claim_text(&claims, "factory"),
+        section: claim_text(&claims, "section"),
+        department,
+        groups: claim_list(claims.get("groups")),
+        roles: claim_list(claims.get("realm_access").and_then(|r| r.get("roles"))),
+    })
 }
 
 /// The first entry of the "groups" claim in an ID token, without its path ("/srt/frontend" -> "frontend").
@@ -320,6 +386,7 @@ pub async fn gateway_login(app: AppHandle) -> Result<GatewayStatus, String> {
         display_name: login.display_name.filter(|name| !name.trim().is_empty()),
         expires_at: issued.expires_at.map(|v| v.as_str().map(str::to_string).unwrap_or_else(|| v.to_string())),
         group: group_from_token(&id_token),
+        profile: profile_from_token(&id_token),
     };
     if let Ok(path) = status_path(&app) {
         let _ = std::fs::write(path, serde_json::to_string(&status).unwrap_or_default());
@@ -346,5 +413,20 @@ mod group_tests {
         assert_eq!(group_from_token(&token(r#"{"sub":"1"}"#)), None);
         assert_eq!(group_from_token(&token(r#"{"groups":[]}"#)), None);
         assert_eq!(group_from_token("not-a-token"), None);
+    }
+
+    #[test]
+    fn reads_the_profile_the_directory_sends() {
+        let claims = r#"{"preferred_username":"015298","name":"Nobparat Bunchalor","email":"a@b.th","factory":"fac2","section":"FA","dept":"Digital Transformation","groups":["FA","/srt/llm-users"],"realm_access":{"roles":["ai-user"]}}"#;
+        let profile = profile_from_token(&token(claims)).expect("profile");
+        assert_eq!(profile.employee_id, "015298");
+        assert_eq!(profile.name, "Nobparat Bunchalor");
+        assert_eq!((profile.factory.as_str(), profile.section.as_str(), profile.department.as_str()), ("fac2", "FA", "Digital Transformation"));
+        assert_eq!(profile.groups, vec!["FA", "llm-users"]);
+        assert_eq!(profile.roles, vec!["ai-user"]);
+        // a token with little in it still gives a profile, with the rest empty
+        let small = profile_from_token(&token(r#"{"preferred_username":"1","given_name":"A","family_name":"B"}"#)).unwrap();
+        assert_eq!((small.name.as_str(), small.employee_id.as_str(), small.section.as_str()), ("A B", "1", ""));
+        assert_eq!(profile_from_token("not-a-token"), None);
     }
 }

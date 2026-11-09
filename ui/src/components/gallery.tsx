@@ -14,6 +14,7 @@ import { SettingsDialog } from '@/components/dialogs/settings-dialog';
 import { Sources } from '@/components/chat/sources';
 import { StackTrace } from '@/components/chat/stack-trace';
 import { ActivityLine, TurnSummary } from '@/components/chat/turn-activity';
+import { ProfileDetails } from '@/components/dialogs/gateway-account';
 import { ContextView } from '@/components/panels/session-overview';
 import { RightPanel } from '@/components/panels/right-panel';
 import { TerminalPanel } from '@/components/panels/terminal-panel';
@@ -222,6 +223,29 @@ export function Gallery() {
                   },
                 ]}
               />
+            </State>
+          </Group>
+
+          <Group title="Settings > Account: ข้อมูลผู้ใช้" note="ข้อมูลจาก SSO แสดงเฉพาะช่องที่ directory ส่งมา">
+            <State label="Signed in, with details">
+              <div className="w-[28rem]">
+                <ProfileDetails
+                  status={{
+                    signedIn: true,
+                    username: '015298',
+                    profile: {
+                      name: 'Nobparat Bunchalor', employeeId: '015298', email: 'nobparat-b@sumitomorubber.co.th',
+                      factory: 'fac2', section: 'FA', department: 'Digital Transformation',
+                      groups: ['FA', 'bifrost-admins', 'llm-users', 'org-owners', 'ragflow-users'], roles: ['ai-user'],
+                    },
+                  }}
+                />
+              </div>
+            </State>
+            <State label="Signed in before details were kept">
+              <div className="w-[28rem]">
+                <ProfileDetails status={{ signedIn: true, username: '015298' }} />
+              </div>
             </State>
           </Group>
 
