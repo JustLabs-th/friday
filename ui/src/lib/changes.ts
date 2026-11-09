@@ -6,9 +6,11 @@ export interface Changes {
   added: number;
   removed: number;
   files: number;
+  /** The changed and new files (relative to the project folder), for the Outputs list. */
+  names: string[];
 }
 
-const none: Changes = { added: 0, removed: 0, files: 0 };
+const none: Changes = { added: 0, removed: 0, files: 0, names: [] };
 
 /**
  * The chat's changes: read when it opens, every few seconds while it is working, and once more when it
@@ -26,7 +28,7 @@ export function useChanges(threadId: string | null, running: boolean): Changes {
     let cancelled = false;
     const read = () =>
       invoke<Changes>('git_changes', { threadId })
-        .then(next => !cancelled && setChanges(next))
+        .then(next => !cancelled && setChanges({ ...none, ...next, names: next.names ?? [] }))
         .catch(() => undefined);
     void read();
     const timer = running ? window.setInterval(read, 4000) : undefined;

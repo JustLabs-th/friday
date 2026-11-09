@@ -32,13 +32,78 @@ interface Item {
   server?: string; tool?: string; error?: { message: string }; result?: unknown;
   action?: { type: string; url?: string; query?: string; queries?: string[] };
 }
-interface WireTurn { id: string; status: string; items: Item[]; error?: { message: string } | null }
-interface Turn extends WireTurn { plan?: PlanData; approvals?: ConfirmationRequest[]; publish?: PublishNote }
+interface WireTurn {
+  id: string; status: string; items: Item[]; error?: { message: string } | null;
+  startedAt?: number | null; completedAt?: number | null; durationMs?: number | null;
+}
+/** Tokens, as the engine counts them for one model call or a whole thread. */
+export interface TokenBreakdown { total: number; input: number; cached: number; output: number; reasoning: number }
+interface RawBreakdown { totalTokens?: number; inputTokens?: number; cachedInputTokens?: number; outputTokens?: number; reasoningOutputTokens?: number }
+/** What a chat has used so far: all of it (`total`), its latest model call (`last`, about the size of the context) and the model's window. */
+export interface ThreadUsage { total: TokenBreakdown; last: TokenBreakdown; window: number | null }
+interface Turn extends WireTurn {
+  plan?: PlanData; approvals?: ConfirmationRequest[]; publish?: PublishNote;
+  /** Milliseconds since 1970 when the turn started and ended (the clock of this computer when the engine gives none). */
+  startedMs?: number; endedMs?: number;
+  /** The thread's token total when this turn began; the turn's own use is the growth since. */
+  base?: TokenBreakdown; tokens?: TokenBreakdown;
+}
+
+const zero: TokenBreakdown = { total: 0, input: 0, cached: 0, output: 0, reasoning: 0 };
+const num = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+function breakdown(raw?: RawBreakdown | null): TokenBreakdown {
+  return { total: num(raw?.totalTokens), input: num(raw?.inputTokens), cached: num(raw?.cachedInputTokens), output: num(raw?.outputTokens), reasoning: num(raw?.reasoningOutputTokens) };
+}
+const minus = (a: TokenBreakdown, b: TokenBreakdown): TokenBreakdown => ({
+  total: Math.max(0, a.total - b.total), input: Math.max(0, a.input - b.input), cached: Math.max(0, a.cached - b.cached),
+  output: Math.max(0, a.output - b.output), reasoning: Math.max(0, a.reasoning - b.reasoning),
+});
+
+const TOOL_LABELS: Record<string, string> = {
+  'Liam-deploy_project': 'กำลัง deploy โปรเจกต์',
+  'Liam-new_nextjs_project': 'กำลังสร้างโปรเจกต์',
+  'Liam-upgrade_project': 'กำลังอัปเกรดโปรเจกต์',
+  'Liam-check_packages': 'กำลังตรวจแพ็กเกจ',
+};
+function toolLabel(tool?: string) {
+  if (!tool) return 'กำลังใช้เครื่องมือ';
+  if (TOOL_LABELS[tool]) return TOOL_LABELS[tool];
+  if (tool.startsWith('Coolify-')) return 'กำลังติดต่อ Coolify';
+  if (tool.startsWith('Homarr-')) return 'กำลังอัปเดตแดชบอร์ด';
+  return `กำลังใช้เครื่องมือ ${tool}`;
+}
+/** How long a finished turn took: the engine's figure, else from its start and end times (this session or a loaded one). */
+function elapsed(turn: Turn): number | undefined {
+  if (typeof turn.durationMs === 'number') return turn.durationMs;
+  if (turn.startedMs !== undefined && turn.endedMs !== undefined) return turn.endedMs - turn.startedMs;
+  if (typeof turn.startedAt === 'number' && typeof turn.completedAt === 'number') return (turn.completedAt - turn.startedAt) * 1000;
+  return undefined;
+}
+
+/** What the agent is doing right now, in words, from the newest item of the turn. */
+function statusText(turn: Turn): string {
+  if (turn.approvals?.some(a => a.state === 'requested')) return 'รอคุณอนุมัติ';
+  const item = [...turn.items].reverse().find(entry => entry.type !== 'userMessage');
+  if (!item) return 'กำลังเริ่มทำงาน';
+  // An item that has finished means the model is thinking about what to do next.
+  if (item.status && !isActive(item.status) && item.type !== 'agentMessage' && item.type !== 'reasoning') return 'กำลังคิด';
+  switch (item.type) {
+    case 'reasoning': return 'กำลังคิด';
+    case 'agentMessage': return 'กำลังตอบ';
+    case 'commandExecution': return 'กำลังรันคำสั่ง';
+    case 'fileChange': return 'กำลังแก้ไฟล์';
+    case 'webSearch': return 'กำลังค้นหา';
+    case 'dynamicToolCall':
+    case 'mcpToolCall': return toolLabel(item.tool);
+    default: return 'กำลังทำงาน';
+  }
+}
 interface RpcMessage {
   id?: string | number; method: string;
   params: {
     threadId?: string; turnId?: string; itemId?: string; delta?: string; summaryIndex?: number;
     item?: Item; turn?: WireTurn; thread?: CodexThread; error?: { message: string }; willRetry?: boolean;
+    tokenUsage?: { total?: RawBreakdown; last?: RawBreakdown; modelContextWindow?: number | null };
     explanation?: string; plan?: { step: string; status: string }[];
     command?: string; reason?: string; cwd?: string; kind?: string; requestId?: string | number;
   };
@@ -54,6 +119,8 @@ interface Snapshot {
   models: ModelInfo[]; defaultModel: string;
   threads: Record<string, CodexThread>; messages: Record<string, Message[]>;
   running: Record<string, string>; loading: Record<string, boolean>;
+  /** Tokens each chat has used, from the engine's reports (empty until the first model call). */
+  usage: Record<string, ThreadUsage>;
 }
 
 export function samePath(left: string, right: string) {
@@ -103,6 +170,12 @@ function renderTurns(turns: Turn[]): Message[] {
       plan: turn.plan || derivePlan(turn.items, (users[users.length - 1]?.text || ''), isActive(turn.status)),
       publish: turn.publish,
       running: isActive(turn.status) || undefined,
+      // What the agent is doing now, how long this turn has gone on and what it has cost in tokens.
+      activity: isActive(turn.status) ? statusText(turn) : undefined,
+      startedMs: turn.startedMs,
+      elapsedMs: isActive(turn.status) ? undefined : elapsed(turn),
+      outcome: isActive(turn.status) ? undefined : turn.status === 'completed' ? 'completed' as const : turn.status === 'interrupted' ? 'interrupted' as const : 'failed' as const,
+      tokens: turn.tokens,
       runs: runs.length ? runs : undefined,
       steps: steps.length ? steps : undefined,
       sources: sources.length ? sources : undefined,
@@ -162,7 +235,7 @@ async function inputs(text: string, files: File[]): Promise<Input[]> {
 }
 
 class CodexClient {
-  private snapshot: Snapshot = { status: isTauri() ? 'connecting' : 'browser', info: null, error: '', account: '', models: [], defaultModel: '', threads: {}, messages: {}, running: {}, loading: {} };
+  private snapshot: Snapshot = { status: isTauri() ? 'connecting' : 'browser', info: null, error: '', account: '', models: [], defaultModel: '', threads: {}, messages: {}, running: {}, loading: {}, usage: {} };
   private listeners = new Set<() => void>();
   private unlisten: UnlistenFn[] = [];
   private connecting: Promise<EngineInfo> | null = null;
@@ -226,8 +299,22 @@ class CodexClient {
     switch (message.method) {
       case 'turn/started':
         turn.status = 'inProgress';
+        // The engine's clock when it gives one (seconds), else this computer's.
+        turn.startedMs = typeof p.turn?.startedAt === 'number' ? p.turn.startedAt * 1000 : turn.startedMs ?? Date.now();
+        turn.base ??= this.snapshot.usage[threadId]?.total;
         this.running(threadId, turnId);
         break;
+      case 'thread/tokenUsage/updated': {
+        if (!p.tokenUsage) return;
+        const total = breakdown(p.tokenUsage.total);
+        const last = breakdown(p.tokenUsage.last);
+        const window = typeof p.tokenUsage.modelContextWindow === 'number' && p.tokenUsage.modelContextWindow > 0 ? p.tokenUsage.modelContextWindow : null;
+        this.update({ usage: { ...this.snapshot.usage, [threadId]: { total, last, window } } });
+        // First report of a turn whose start we did not see: what came before it is the total minus its latest call.
+        turn.base ??= minus(total, last);
+        turn.tokens = minus(total, turn.base ?? zero);
+        break;
+      }
       case 'item/started':
       case 'item/completed':
         if (p.item) {
@@ -261,6 +348,9 @@ class CodexClient {
       case 'turn/completed':
         turn.status = p.turn?.status || 'completed';
         turn.error = p.turn?.error;
+        turn.endedMs = typeof p.turn?.completedAt === 'number' ? p.turn.completedAt * 1000 : Date.now();
+        turn.startedMs ??= typeof p.turn?.durationMs === 'number' ? turn.endedMs - p.turn.durationMs : undefined;
+        if (typeof p.turn?.durationMs === 'number') turn.durationMs = p.turn.durationMs;
         turn.approvals = turn.approvals?.map(a => a.state === 'requested' ? { ...a, state: 'resolved' } : a);
         this.running(threadId, null);
         for (const [key, request] of this.approvals) if (request.params.threadId === threadId && request.params.turnId === turnId) this.approvals.delete(key);
@@ -268,7 +358,7 @@ class CodexClient {
         break;
       case 'error':
         if (p.error) { turn.error = p.error; this.report(p.error.message); }
-        if (!p.willRetry) { turn.status = 'failed'; this.running(threadId, null); }
+        if (!p.willRetry) { turn.status = 'failed'; turn.endedMs ??= Date.now(); this.running(threadId, null); }
         break;
       case 'serverRequest/resolved': {
         const key = JSON.stringify(p.requestId);
@@ -541,6 +631,11 @@ class CodexClient {
     const turn = this.turn(threadId!, turnId!);
     turn.approvals = turn.approvals?.map(a => a.id === key ? { ...a, state: approved ? 'approved' : 'denied' } : a);
     this.publish(threadId!);
+  };
+  /** Asks the engine to summarise the chat so far, to free room in the model's context. */
+  compact = async (threadId: string) => {
+    if (this.snapshot.running[threadId]) throw new Error('รอให้ session ทำงานเสร็จก่อนบีบอัด context');
+    await rpc('thread/compact/start', { threadId });
   };
   rename = async (threadId: string, name: string) => {
     await rpc('thread/name/set', { threadId, name });

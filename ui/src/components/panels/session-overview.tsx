@@ -1,8 +1,140 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { CheckIcon, FileTextIcon, FolderIcon, LaptopIcon, TerminalIcon, XIcon, type LucideIcon } from 'lucide-react';
 import type { SandboxRunData } from '@/components/chat/sandbox-run';
 import type { Project } from '@/components/dialogs/new-project-dialog';
+import { invoke } from '@tauri-apps/api/core';
+import { formatTokens } from '@/components/chat/turn-activity';
 import { useChanges } from '@/lib/changes';
+import { codex, useCodex, type ThreadUsage } from '@/lib/codex';
+
+/** Files Liam can open from the Outputs list (the same documents the backend allows). */
+const OPENABLE = new Set(['html', 'htm', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'txt', 'md', 'csv', 'json', 'xlsx', 'xls', 'docx', 'doc', 'pptx', 'ppt']);
+const MAX_OUTPUTS = 30;
+
+const fileExtension = (name: string) => name.split('.').pop()?.toLowerCase() ?? '';
+
+/** The Context box of a chat: reads what the engine reported and lets the person compact the chat. */
+function ContextBox({ threadId, running }: { threadId: string | null; running: boolean }) {
+  const engine = useCodex();
+  const [compacting, setCompacting] = useState(false);
+
+  async function compact() {
+    if (!threadId) return;
+    setCompacting(true);
+    try {
+      await codex.compact(threadId);
+    } catch (error) {
+      codex.report(error);
+    } finally {
+      setCompacting(false);
+    }
+  }
+
+  return <ContextView usage={threadId ? engine.usage[threadId] : undefined} running={running} compacting={compacting} onCompact={() => void compact()} />;
+}
+
+/** How much of the model's window the chat fills, as the engine counts it. */
+export function ContextView({ usage, running, compacting, onCompact }: { usage?: ThreadUsage; running: boolean; compacting: boolean; onCompact: () => void }) {
+  const window = usage?.window ?? null;
+  // The size of the latest request is about what the next one starts from.
+  const used = usage?.last.total ?? 0;
+  const fresh = Math.max(0, (usage?.last.input ?? 0) - (usage?.last.cached ?? 0));
+  const rows = [
+    { key: 'input', label: 'Input (ใหม่)', value: fresh, color: 'bg-blue-500' },
+    { key: 'cached', label: 'Cached input', value: usage?.last.cached ?? 0, color: 'bg-emerald-500' },
+    { key: 'output', label: 'Output', value: usage?.last.output ?? 0, color: 'bg-amber-500' },
+    ...((usage?.last.reasoning ?? 0) > 0 ? [{ key: 'reasoning', label: 'Reasoning', value: usage!.last.reasoning, color: 'bg-violet-500' }] : []),
+  ];
+  const free = window ? Math.max(0, window - used) : null;
+  const percent = window ? Math.min(100, Math.round((used / window) * 100)) : null;
+  const share = (value: number) => (window ? `${((value / window) * 100).toFixed(1)}%` : '');
+
+  return (
+    <Section title="Context">
+      {usage ? (
+        <>
+          <div className="flex items-baseline justify-between text-sm">
+            <span className="font-medium">{percent !== null ? `${percent}% used` : `${formatTokens(used)} tokens`}</span>
+            <span className="text-muted-foreground">{window ? `${formatTokens(used)} / ${formatTokens(window)}` : formatTokens(used)}</span>
+          </div>
+          <div
+            className="flex h-1.5 overflow-hidden rounded-full bg-muted"
+            role="progressbar"
+            aria-label="Context usage"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={percent ?? undefined}
+          >
+            {window &&
+              rows.map(row => <div key={row.key} className={row.color} style={{ width: `${Math.min(100, (row.value / window) * 100)}%` }} />)}
+          </div>
+          <ul className="mt-1 flex flex-col gap-1 text-sm">
+            {rows.map(row => (
+              <li key={row.key} className="flex items-center gap-2">
+                <span className={`size-2.5 shrink-0 rounded-[3px] ${row.color}`} aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate">{row.label}</span>
+                <span className="tabular-nums text-muted-foreground">{formatTokens(row.value)}</span>
+                <span className="w-12 text-right tabular-nums text-muted-foreground">{share(row.value)}</span>
+              </li>
+            ))}
+            {free !== null && (
+              <li className="flex items-center gap-2">
+                <span className="size-2.5 shrink-0 rounded-[3px] border" aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate">Free space</span>
+                <span className="tabular-nums text-muted-foreground">{formatTokens(free)}</span>
+                <span className="w-12 text-right tabular-nums text-muted-foreground">{share(free)}</span>
+              </li>
+            )}
+          </ul>
+          <button
+            type="button"
+            onClick={onCompact}
+            disabled={running || compacting}
+            className="mt-2 w-fit self-end rounded-md border px-3 py-1.5 text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {compacting ? 'กำลังบีบอัด…' : 'Compact session'}
+          </button>
+        </>
+      ) : (
+        <p className="text-sm text-muted-foreground">ยังไม่มีข้อมูล (จะแสดงหลังจากเรียกโมเดลครั้งแรก)</p>
+      )}
+    </Section>
+  );
+}
+
+/** The files the chat created or changed in the project folder; the ones that are documents open on click. */
+function OutputsBox({ names, folder }: { names: string[]; folder?: string }) {
+  if (names.length === 0) {
+    return (
+      <Section title="Outputs">
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <FileTextIcon className="size-4 shrink-0" aria-hidden="true" />
+          ยังไม่มีไฟล์ที่ session นี้สร้าง
+        </p>
+      </Section>
+    );
+  }
+  const open = (name: string) => {
+    if (!folder) return;
+    void invoke('open_local_file', { path: `${folder.replace(/[\\/]+$/, '')}/${name}` }).catch(error => codex.report(error));
+  };
+  return (
+    <Section title={`Outputs · ${names.length}`}>
+      {names.slice(0, MAX_OUTPUTS).map(name =>
+        folder && OPENABLE.has(fileExtension(name)) ? (
+          <button key={name} type="button" onClick={() => open(name)} className="rounded text-left hover:bg-muted">
+            <Row icon={FileTextIcon}>{name}</Row>
+          </button>
+        ) : (
+          <Row key={name} icon={FileTextIcon}>
+            {name}
+          </Row>
+        ),
+      )}
+      {names.length > MAX_OUTPUTS && <p className="text-xs text-muted-foreground">และอีก {names.length - MAX_OUTPUTS} ไฟล์</p>}
+    </Section>
+  );
+}
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -68,6 +200,8 @@ export function SessionOverview({
   const reported = countChanges(files);
   const added = folder.files ? folder.added : reported.added;
   const removed = folder.files ? folder.removed : reported.removed;
+  // The files of the folder first; the edits the chat reported when the folder cannot be read (browser preview).
+  const outputs = folder.names.length ? folder.names : [...new Set(files.map(file => file.path))];
   const running = runs.filter(run => run.state === 'running');
   const finished = runs.length - running.length;
 
@@ -85,34 +219,9 @@ export function SessionOverview({
         )}
       </Section>
 
-      <Section title="Context">
-        <div className="flex items-center justify-between text-sm">
-          <span>Usage</span>
-          <span className="text-muted-foreground">ยังไม่มีข้อมูล</span>
-        </div>
-        <div
-          className="h-1 overflow-hidden rounded-full bg-muted"
-          role="progressbar"
-          aria-label="Context usage"
-          aria-valuemin={0}
-          aria-valuemax={100}
-        />
-      </Section>
+      <ContextBox threadId={threadId} running={chatRunning} />
 
-      <Section title="Outputs">
-        {files.length ? (
-          files.map((file, index) => (
-            <Row key={`${file.path}:${index}`} icon={FileTextIcon}>
-              {file.path}
-            </Row>
-          ))
-        ) : (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <FileTextIcon className="size-4 shrink-0" aria-hidden="true" />
-            ยังไม่มีไฟล์ที่ session นี้สร้าง
-          </p>
-        )}
-      </Section>
+      <OutputsBox names={outputs} folder={project?.path || undefined} />
 
       <Section title="Changes">
         <span className="text-sm">

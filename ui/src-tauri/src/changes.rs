@@ -23,6 +23,18 @@ pub struct Changes {
     added: u32,
     removed: u32,
     files: u32,
+    /// The files themselves (relative paths, at most `MAX_NAMES`), for the "Outputs" list.
+    names: Vec<String>,
+}
+
+const MAX_NAMES: usize = 200;
+
+impl Changes {
+    fn note(&mut self, name: &str) {
+        if self.names.len() < MAX_NAMES {
+            self.names.push(name.replace('\\', "/"));
+        }
+    }
 }
 
 fn git(dir: &Path, args: &[&str]) -> Option<String> {
@@ -65,8 +77,8 @@ fn count_lines(path: &Path) -> u32 {
 }
 
 /// Lines in every file of a folder that is not a repository yet.
-fn walk(dir: &Path, depth: u32, files: &mut u32, lines: &mut u32) {
-    if depth > 8 || *files > 5000 {
+fn walk(dir: &Path, root: &Path, depth: u32, changes: &mut Changes) {
+    if depth > 8 || changes.files > 5000 {
         return;
     }
     let Ok(entries) = fs::read_dir(dir) else { return };
@@ -75,11 +87,12 @@ fn walk(dir: &Path, depth: u32, files: &mut u32, lines: &mut u32) {
         let name = entry.file_name().to_string_lossy().to_string();
         if path.is_dir() {
             if !SKIP_DIRS.contains(&name.as_str()) {
-                walk(&path, depth + 1, files, lines);
+                walk(&path, root, depth + 1, changes);
             }
         } else {
-            *files += 1;
-            *lines += count_lines(&path);
+            changes.files += 1;
+            changes.added += count_lines(&path);
+            changes.note(&path.strip_prefix(root).unwrap_or(&path).to_string_lossy());
         }
     }
 }
@@ -87,12 +100,13 @@ fn walk(dir: &Path, depth: u32, files: &mut u32, lines: &mut u32) {
 fn compute(dir: &Path, base: &str) -> Changes {
     let mut changes = Changes::default();
     if git(dir, &["rev-parse", "--is-inside-work-tree"]).is_none() {
-        let (mut files, mut lines) = (0, 0);
-        walk(dir, 0, &mut files, &mut lines);
-        changes.files = files;
-        changes.added = lines;
+        walk(dir, dir, 0, &mut changes);
         return changes;
     }
+    // Names of files changed since the baseline (deleted ones are counted but not listed: there is nothing to open).
+    let present: Vec<String> = git(dir, &["diff", "--name-only", "--diff-filter=d", base])
+        .map(|text| text.lines().filter(|l| !l.is_empty()).map(str::to_string).collect())
+        .unwrap_or_default();
     if let Some(stat) = git(dir, &["diff", "--numstat", base]) {
         for line in stat.lines() {
             let mut parts = line.split('\t');
@@ -102,10 +116,14 @@ fn compute(dir: &Path, base: &str) -> Changes {
             changes.files += 1;
         }
     }
+    for name in &present {
+        changes.note(name);
+    }
     if let Some(untracked) = git(dir, &["ls-files", "--others", "--exclude-standard"]) {
         for name in untracked.lines().filter(|l| !l.is_empty()) {
             changes.files += 1;
             changes.added += count_lines(&dir.join(name));
+            changes.note(name);
         }
     }
     changes
@@ -142,6 +160,9 @@ mod tests {
         let changes = compute(&dir, EMPTY_TREE);
         assert_eq!(changes.files, 2);
         assert_eq!(changes.added, 3);
+        let mut names = changes.names.clone();
+        names.sort();
+        assert_eq!(names, vec!["a.txt".to_string(), "b.bin".to_string()], "the files are listed, node_modules is not");
         let _ = fs::remove_dir_all(&dir);
     }
 }

@@ -11,6 +11,8 @@ import { Reasoning, type ReasoningData } from '@/components/chat/reasoning';
 import { type SandboxRunData } from '@/components/chat/sandbox-run';
 import { Sources, type Source } from '@/components/chat/sources';
 import { StackTrace } from '@/components/chat/stack-trace';
+import { ActivityLine, TurnSummary } from '@/components/chat/turn-activity';
+import type { TokenBreakdown } from '@/lib/codex';
 
 export interface Message {
   id: string;
@@ -33,6 +35,14 @@ export interface Message {
   confirmations?: ConfirmationRequest[];
   /** Where the turn's changes were saved (the company Git server), once that has happened. */
   publish?: { status: 'saved' | 'open' | 'skipped' | 'error'; message: string; url?: string };
+  /** While the turn runs: what the agent is doing now, when the turn started (ms since 1970). */
+  activity?: string;
+  startedMs?: number;
+  /** After it ends: how it ended and how long it took (ms). */
+  outcome?: 'completed' | 'failed' | 'interrupted';
+  elapsedMs?: number;
+  /** Tokens the turn has used (growing while it runs). Absent when the engine reported none. */
+  tokens?: TokenBreakdown;
 }
 
 interface ChatViewProps {
@@ -191,15 +201,25 @@ export function ChatView({
                       </p>
                     )}
                     {message.sources && !message.running && <Sources sources={message.sources} />}
+                    {message.role === 'assistant' && message.running && message.activity && (
+                      <ActivityLine activity={message.activity} startedMs={message.startedMs} tokens={message.tokens} />
+                    )}
+                    {message.role === 'assistant' && !message.running && message.outcome && (
+                      <TurnSummary outcome={message.outcome} elapsedMs={message.elapsedMs} tokens={message.tokens} />
+                    )}
                   </div>
                   {message.text && <CopyMessageButton text={message.text} />}
                 </div>
               </div>
             ))}
-            {(loading || (running && !messages[messages.length - 1]?.plan)) && (
+            {loading && (
               <p role="status" className="text-xs text-muted-foreground">
-                {loading ? 'กำลังโหลด session…' : 'Liam กำลังทำงาน…'}
+                กำลังโหลด session…
               </p>
+            )}
+            {/* The turn has started but nothing of it is on screen yet. */}
+            {!loading && running && messages[messages.length - 1]?.role !== 'assistant' && (
+              <ActivityLine activity="กำลังเริ่มทำงาน" />
             )}
           </div>
         )}

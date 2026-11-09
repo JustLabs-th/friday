@@ -13,6 +13,8 @@ import { SaveSkillDialog } from '@/components/dialogs/save-skill-dialog';
 import { SettingsDialog } from '@/components/dialogs/settings-dialog';
 import { Sources } from '@/components/chat/sources';
 import { StackTrace } from '@/components/chat/stack-trace';
+import { ActivityLine, TurnSummary } from '@/components/chat/turn-activity';
+import { ContextView } from '@/components/panels/session-overview';
 import { RightPanel } from '@/components/panels/right-panel';
 import { TerminalPanel } from '@/components/panels/terminal-panel';
 import {
@@ -220,6 +222,47 @@ export function Gallery() {
                   },
                 ]}
               />
+            </State>
+          </Group>
+
+          <Group title="สถานะขณะทำงาน, สรุปท้ายรอบ, Context" note="แถบสถานะ + เวลา + โทเค็นขณะ agent ทำงาน สรุปเมื่อจบ และกล่อง Context ในแผงขวา">
+            <State label="Working (live timer)">
+              <ActivityLine
+                activity="กำลังรันคำสั่ง"
+                startedMs={Date.now() - 102_000}
+                tokens={{ total: 18_300, input: 16_900, cached: 9_000, output: 1_400, reasoning: 0 }}
+              />
+            </State>
+            <State label="Working, waiting for approval, no token report">
+              <ActivityLine activity="รอคุณอนุมัติ" startedMs={Date.now() - 9_000} />
+            </State>
+            <State label="Finished">
+              <TurnSummary outcome="completed" elapsedMs={192_000} tokens={{ total: 54_200, input: 49_800, cached: 30_000, output: 4_400, reasoning: 0 }} />
+            </State>
+            <State label="Stopped by the person">
+              <TurnSummary outcome="interrupted" elapsedMs={41_000} tokens={{ total: 7_300, input: 6_900, cached: 0, output: 400, reasoning: 0 }} />
+            </State>
+            <State label="Failed, no token report">
+              <TurnSummary outcome="failed" elapsedMs={12_000} />
+            </State>
+            <State label="Context box (right panel)">
+              <div className="w-80 rounded-lg border">
+                <ContextView
+                  running={false}
+                  compacting={false}
+                  onCompact={() => undefined}
+                  usage={{
+                    window: 65_536,
+                    total: { total: 54_200, input: 49_800, cached: 30_000, output: 4_400, reasoning: 0 },
+                    last: { total: 26_800, input: 25_100, cached: 11_900, output: 1_700, reasoning: 0 },
+                  }}
+                />
+              </div>
+            </State>
+            <State label="Context box, nothing reported yet">
+              <div className="w-80 rounded-lg border">
+                <ContextView running={false} compacting={false} onCompact={() => undefined} />
+              </div>
             </State>
           </Group>
 
