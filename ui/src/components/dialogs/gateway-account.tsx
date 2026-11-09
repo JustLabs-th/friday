@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { LogIn, LogOut } from 'lucide-react';
+import { LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { gatewayLogin, gatewayLogout, gatewayRefreshProfile, gatewayStatus, type GatewayProfile, type GatewayStatus } from '@/lib/gateway';
 
@@ -79,7 +79,6 @@ export function GatewayAccount({ onChanged }: { onChanged?: () => void }) {
           <ProfileDetails status={status} loading={busy} onLoad={() => void run(gatewayRefreshProfile)} />
           <div className="mt-3 flex justify-end">
             <Button variant="outline" size="sm" disabled={busy} onClick={() => void run(gatewayLogout)}>
-              <LogOut aria-hidden="true" />
               ออกจากระบบ
             </Button>
           </div>
