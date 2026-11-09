@@ -327,7 +327,7 @@ export function AppSidebar({
               disabled={signingIn}
               title={signInError || 'Sign in with the company account'}
               aria-label="Sign in"
-              className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-md border border-sidebar-border bg-background px-3 py-1.5 text-sm font-medium shadow-xs hover:bg-sidebar-accent disabled:opacity-60 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0 ${signInError ? 'border-destructive text-destructive' : ''}`}
+              className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-md bg-black px-3 py-1.5 text-sm font-medium text-white shadow-xs hover:bg-black/80 disabled:opacity-60 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0 ${signInError ? 'bg-destructive hover:bg-destructive/90' : ''}`}
             >
               <span className="truncate group-data-[collapsible=icon]:hidden">
                 {signingIn ? 'Signing in…' : signInError ? 'Sign in failed, retry' : 'Sign in'}
