@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { LogIn, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { gatewayLogin, gatewayLogout, gatewayStatus, type GatewayProfile, type GatewayStatus } from '@/lib/gateway';
+import { gatewayLogin, gatewayLogout, gatewayRefreshProfile, gatewayStatus, type GatewayProfile, type GatewayStatus } from '@/lib/gateway';
 
 /** The person's details as rows (only the ones the directory sent). */
 function profileRows(profile: GatewayProfile, username?: string | null): [string, string][] {
@@ -19,7 +19,7 @@ function profileRows(profile: GatewayProfile, username?: string | null): [string
 }
 
 /** The signed-in person's details, or a hint to sign in again when this sign-in did not keep them. */
-export function ProfileDetails({ status }: { status: GatewayStatus | null }) {
+export function ProfileDetails({ status, onLoad, loading = false }: { status: GatewayStatus | null; onLoad?: () => void; loading?: boolean }) {
   return (
     <div className="mt-3 rounded-lg border">
       {status?.profile ? (
@@ -32,9 +32,16 @@ export function ProfileDetails({ status }: { status: GatewayStatus | null }) {
           ))}
         </dl>
       ) : (
-        <p className="px-4 py-3 text-sm text-muted-foreground">
-          Sign out and sign in again to load your details (name, employee ID, section, groups).
-        </p>
+        <div className="flex items-center justify-between gap-4 px-4 py-3">
+          <p className="text-sm text-muted-foreground">
+            This sign-in did not keep your details (name, employee ID, section, groups).
+          </p>
+          {onLoad && (
+            <Button variant="outline" size="sm" disabled={loading} onClick={onLoad} className="shrink-0">
+              {loading ? 'Waiting for the browser…' : 'Load my details'}
+            </Button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -90,7 +97,7 @@ export function GatewayAccount({ onChanged }: { onChanged?: () => void }) {
           </Button>
         )}
       </div>
-      {signedIn && <ProfileDetails status={status} />}
+      {signedIn && <ProfileDetails status={status} loading={busy} onLoad={() => void run(gatewayRefreshProfile)} />}
       {error && (
         <p role="alert" className="mt-2 text-sm text-destructive">
           {error}

@@ -300,10 +300,8 @@ pub(crate) async fn wait_for_code(listener: TcpListener, expected_state: &str) -
     }
 }
 
-/// Opens the browser for Keycloak, then trades the result for a gateway key held in the credential store.
-#[tauri::command]
-pub async fn gateway_login(app: AppHandle) -> Result<GatewayStatus, String> {
-    let cfg = config()?;
+/// Opens the browser for the company sign-in and returns the person's ID token (and the HTTP client used).
+async fn sso_id_token(app: &AppHandle, cfg: &Config) -> Result<(String, reqwest::Client), String> {
     let redirect = url::Url::parse(&cfg.redirect_uri).map_err(|e| e.to_string())?;
     if redirect.host_str() != Some("127.0.0.1") {
         return Err("The redirect address must be 127.0.0.1.".into());
@@ -355,6 +353,14 @@ pub async fn gateway_login(app: AppHandle) -> Result<GatewayStatus, String> {
         .await
         .map_err(|e| e.to_string())?;
     let id_token = token.id_token.ok_or("The sign-in server returned no ID token.")?;
+    Ok((id_token, http))
+}
+
+/// Opens the browser for Keycloak, then trades the result for a gateway key held in the credential store.
+#[tauri::command]
+pub async fn gateway_login(app: AppHandle) -> Result<GatewayStatus, String> {
+    let cfg = config()?;
+    let (id_token, http) = sso_id_token(&app, &cfg).await?;
 
     let portal = |path: &str| {
         http.post(format!("{}{}", cfg.portal_url, path)).bearer_auth(&id_token)
@@ -388,6 +394,25 @@ pub async fn gateway_login(app: AppHandle) -> Result<GatewayStatus, String> {
         group: group_from_token(&id_token),
         profile: profile_from_token(&id_token),
     };
+    if let Ok(path) = status_path(&app) {
+        let _ = std::fs::write(path, serde_json::to_string(&status).unwrap_or_default());
+    }
+    Ok(status)
+}
+
+/// Reads the person's details from the company sign-in again, without issuing a new gateway key (so keys held in
+/// other apps keep working). For a sign-in made before the details were kept. The browser opens for a moment;
+/// being signed in to the company already, it normally goes straight back.
+#[tauri::command]
+pub async fn gateway_refresh_profile(app: AppHandle) -> Result<GatewayStatus, String> {
+    let mut status = read_status(&app);
+    if !status.signed_in {
+        return Err("Sign in first.".into());
+    }
+    let cfg = config()?;
+    let (id_token, _) = sso_id_token(&app, &cfg).await?;
+    status.group = group_from_token(&id_token);
+    status.profile = profile_from_token(&id_token);
     if let Ok(path) = status_path(&app) {
         let _ = std::fs::write(path, serde_json::to_string(&status).unwrap_or_default());
     }

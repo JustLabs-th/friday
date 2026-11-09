@@ -59,6 +59,15 @@ export async function gatewayLogin(): Promise<GatewayStatus> {
   return status;
 }
 
+/** Reads the person's details from the company sign-in again, without issuing a new key. */
+export async function gatewayRefreshProfile(): Promise<GatewayStatus> {
+  if (!isTauri()) throw new Error('This works in the Liam desktop app only.');
+  await trustCompanyCertificate();
+  const status = await invoke<GatewayStatus>('gateway_refresh_profile');
+  window.dispatchEvent(new Event(CHANGED));
+  return status;
+}
+
 export async function gatewayLogout(): Promise<GatewayStatus> {
   const status = isTauri() ? await invoke<GatewayStatus>('gateway_logout') : signedOut;
   window.dispatchEvent(new Event(CHANGED));

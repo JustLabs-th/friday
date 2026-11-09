@@ -45,6 +45,7 @@ fn main() {
             trust::trust_install,
             gateway_auth::gateway_status,
             gateway_auth::gateway_login,
+            gateway_auth::gateway_refresh_profile,
             gateway_auth::gateway_logout,
             gitea_auth::gitea_status,
             gitea_auth::gitea_login,
