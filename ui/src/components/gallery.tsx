@@ -228,13 +228,14 @@ export function Gallery() {
           <Group title="สถานะขณะทำงาน, สรุปท้ายรอบ, Context" note="แถบสถานะ + เวลา + โทเค็นขณะ agent ทำงาน สรุปเมื่อจบ และกล่อง Context ในแผงขวา">
             <State label="Working (live timer)">
               <ActivityLine
-                activity="กำลังรันคำสั่ง"
-                startedMs={Date.now() - 102_000}
+                activity="Running a command"
+                label="Switching the new status and panel texts to English"
+                startedMs={Date.now() - 17_000}
                 tokens={{ total: 18_300, input: 16_900, cached: 9_000, output: 1_400, reasoning: 0 }}
               />
             </State>
             <State label="Working, waiting for approval, no token report">
-              <ActivityLine activity="รอคุณอนุมัติ" startedMs={Date.now() - 9_000} />
+              <ActivityLine activity="Waiting for your approval" startedMs={Date.now() - 9_000} />
             </State>
             <State label="Finished">
               <TurnSummary outcome="completed" elapsedMs={192_000} tokens={{ total: 54_200, input: 49_800, cached: 30_000, output: 4_400, reasoning: 0 }} />

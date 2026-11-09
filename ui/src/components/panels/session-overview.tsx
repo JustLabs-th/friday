@@ -40,7 +40,7 @@ export function ContextView({ usage, running, compacting, onCompact }: { usage?:
   const used = usage?.last.total ?? 0;
   const fresh = Math.max(0, (usage?.last.input ?? 0) - (usage?.last.cached ?? 0));
   const rows = [
-    { key: 'input', label: 'Input (ใหม่)', value: fresh, color: 'bg-blue-500' },
+    { key: 'input', label: 'Input (new)', value: fresh, color: 'bg-blue-500' },
     { key: 'cached', label: 'Cached input', value: usage?.last.cached ?? 0, color: 'bg-emerald-500' },
     { key: 'output', label: 'Output', value: usage?.last.output ?? 0, color: 'bg-amber-500' },
     ...((usage?.last.reasoning ?? 0) > 0 ? [{ key: 'reasoning', label: 'Reasoning', value: usage!.last.reasoning, color: 'bg-violet-500' }] : []),
@@ -92,11 +92,11 @@ export function ContextView({ usage, running, compacting, onCompact }: { usage?:
             disabled={running || compacting}
             className="mt-2 w-fit self-end rounded-md border px-3 py-1.5 text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {compacting ? 'กำลังบีบอัด…' : 'Compact session'}
+            {compacting ? 'Compacting…' : 'Compact session'}
           </button>
         </>
       ) : (
-        <p className="text-sm text-muted-foreground">ยังไม่มีข้อมูล (จะแสดงหลังจากเรียกโมเดลครั้งแรก)</p>
+        <p className="text-sm text-muted-foreground">No data yet (shown after the first model call)</p>
       )}
     </Section>
   );
@@ -109,7 +109,7 @@ function OutputsBox({ names, folder }: { names: string[]; folder?: string }) {
       <Section title="Outputs">
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <FileTextIcon className="size-4 shrink-0" aria-hidden="true" />
-          ยังไม่มีไฟล์ที่ session นี้สร้าง
+          No files created in this session yet
         </p>
       </Section>
     );
@@ -131,7 +131,7 @@ function OutputsBox({ names, folder }: { names: string[]; folder?: string }) {
           </Row>
         ),
       )}
-      {names.length > MAX_OUTPUTS && <p className="text-xs text-muted-foreground">และอีก {names.length - MAX_OUTPUTS} ไฟล์</p>}
+      {names.length > MAX_OUTPUTS && <p className="text-xs text-muted-foreground">+{names.length - MAX_OUTPUTS} more files</p>}
     </Section>
   );
 }

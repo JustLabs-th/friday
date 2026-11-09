@@ -60,19 +60,19 @@ const minus = (a: TokenBreakdown, b: TokenBreakdown): TokenBreakdown => ({
 });
 
 const TOOL_LABELS: Record<string, string> = {
-  'Liam-deploy_project': 'กำลัง deploy โปรเจกต์',
-  'Liam-new_nextjs_project': 'กำลังสร้างโปรเจกต์',
-  'Liam-upgrade_project': 'กำลังอัปเกรดโปรเจกต์',
-  'Liam-check_packages': 'กำลังตรวจแพ็กเกจ',
+  'Liam-deploy_project': 'Deploying the project',
+  'Liam-new_nextjs_project': 'Creating the project',
+  'Liam-upgrade_project': 'Upgrading the project',
+  'Liam-check_packages': 'Checking packages',
 };
 function toolLabel(tool?: string) {
-  if (!tool) return 'กำลังใช้เครื่องมือ';
+  if (!tool) return 'Using a tool';
   if (TOOL_LABELS[tool]) return TOOL_LABELS[tool];
-  if (tool.startsWith('Coolify-')) return 'กำลังติดต่อ Coolify';
-  if (tool.startsWith('Homarr-')) return 'กำลังอัปเดตแดชบอร์ด';
-  return `กำลังใช้เครื่องมือ ${tool}`;
+  if (tool.startsWith('Coolify-')) return 'Contacting Coolify';
+  if (tool.startsWith('Homarr-')) return 'Updating the dashboard';
+  return `Using tool ${tool}`;
 }
-/** How long a finished turn took: the engine's figure, else from its start and end times (this session or a loaded one). */
+/** How long a finished turn took: the engine's figure, else from its start and end times (this chat's clock or a loaded turn's). */
 function elapsed(turn: Turn): number | undefined {
   if (typeof turn.durationMs === 'number') return turn.durationMs;
   if (turn.startedMs !== undefined && turn.endedMs !== undefined) return turn.endedMs - turn.startedMs;
@@ -82,20 +82,20 @@ function elapsed(turn: Turn): number | undefined {
 
 /** What the agent is doing right now, in words, from the newest item of the turn. */
 function statusText(turn: Turn): string {
-  if (turn.approvals?.some(a => a.state === 'requested')) return 'รอคุณอนุมัติ';
+  if (turn.approvals?.some(a => a.state === 'requested')) return 'Waiting for your approval';
   const item = [...turn.items].reverse().find(entry => entry.type !== 'userMessage');
-  if (!item) return 'กำลังเริ่มทำงาน';
+  if (!item) return 'Starting';
   // An item that has finished means the model is thinking about what to do next.
-  if (item.status && !isActive(item.status) && item.type !== 'agentMessage' && item.type !== 'reasoning') return 'กำลังคิด';
+  if (item.status && !isActive(item.status) && item.type !== 'agentMessage' && item.type !== 'reasoning') return 'Thinking';
   switch (item.type) {
-    case 'reasoning': return 'กำลังคิด';
-    case 'agentMessage': return 'กำลังตอบ';
-    case 'commandExecution': return 'กำลังรันคำสั่ง';
-    case 'fileChange': return 'กำลังแก้ไฟล์';
-    case 'webSearch': return 'กำลังค้นหา';
+    case 'reasoning': return 'Thinking';
+    case 'agentMessage': return 'Writing the reply';
+    case 'commandExecution': return 'Running a command';
+    case 'fileChange': return 'Editing files';
+    case 'webSearch': return 'Searching';
     case 'dynamicToolCall':
     case 'mcpToolCall': return toolLabel(item.tool);
-    default: return 'กำลังทำงาน';
+    default: return 'Working';
   }
 }
 interface RpcMessage {
@@ -634,7 +634,7 @@ class CodexClient {
   };
   /** Asks the engine to summarise the chat so far, to free room in the model's context. */
   compact = async (threadId: string) => {
-    if (this.snapshot.running[threadId]) throw new Error('รอให้ session ทำงานเสร็จก่อนบีบอัด context');
+    if (this.snapshot.running[threadId]) throw new Error('Wait for the session to finish before compacting its context');
     await rpc('thread/compact/start', { threadId });
   };
   rename = async (threadId: string, name: string) => {

@@ -169,6 +169,15 @@ export function ChatView({
                   <div
                     className={`text-sm leading-relaxed ${message.role === 'user' ? 'rounded-2xl bg-muted px-4 py-2.5' : 'flex w-full min-w-0 flex-col gap-3 px-1'}`}
                   >
+                    {/* While it works, what the agent is doing sits above the plan, so it is seen first. */}
+                    {message.role === 'assistant' && message.running && message.activity && (
+                      <ActivityLine
+                        activity={message.activity}
+                        label={message.plan?.steps.find(step => step.status === 'running')?.title}
+                        startedMs={message.startedMs}
+                        tokens={message.tokens}
+                      />
+                    )}
                     {message.reasoning && <Reasoning reasoning={message.reasoning} />}
                     {message.plan && <Plan plan={message.plan} />}
                     {message.steps && message.steps.length > 0 && <ChainOfThought steps={message.steps} />}
@@ -201,9 +210,6 @@ export function ChatView({
                       </p>
                     )}
                     {message.sources && !message.running && <Sources sources={message.sources} />}
-                    {message.role === 'assistant' && message.running && message.activity && (
-                      <ActivityLine activity={message.activity} startedMs={message.startedMs} tokens={message.tokens} />
-                    )}
                     {message.role === 'assistant' && !message.running && message.outcome && (
                       <TurnSummary outcome={message.outcome} elapsedMs={message.elapsedMs} tokens={message.tokens} />
                     )}
@@ -219,7 +225,7 @@ export function ChatView({
             )}
             {/* The turn has started but nothing of it is on screen yet. */}
             {!loading && running && messages[messages.length - 1]?.role !== 'assistant' && (
-              <ActivityLine activity="กำลังเริ่มทำงาน" />
+              <ActivityLine activity="Starting" />
             )}
           </div>
         )}
