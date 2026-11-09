@@ -51,6 +51,26 @@ pub struct GatewayStatus {
     /// The person's name from SSO, when the directory has one.
     pub display_name: Option<String>,
     pub expires_at: Option<String>,
+    /// The person's first Keycloak group (last part of its path), used to file their apps on the dashboard.
+    #[serde(default)]
+    pub group: Option<String>,
+}
+
+/// The first entry of the "groups" claim in an ID token, without its path ("/srt/frontend" -> "frontend").
+/// Only used to label things; the token is not trusted for access here.
+pub(crate) fn group_from_token(id_token: &str) -> Option<String> {
+    let payload = id_token.split('.').nth(1)?;
+    let bytes = URL_SAFE_NO_PAD.decode(payload.trim_end_matches('=')).ok()?;
+    let claims: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    let first = claims.get("groups")?.as_array()?.iter().find_map(|g| g.as_str())?;
+    let name = first.trim().trim_end_matches('/').rsplit('/').next()?.trim();
+    (!name.is_empty()).then(|| name.to_string())
+}
+
+/// The signed-in person's group, if the sign-in gave one.
+pub(crate) fn current_group(app: &AppHandle) -> Option<String> {
+    let status = read_status(app);
+    status.group.filter(|_| status.signed_in)
 }
 
 fn status_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -299,9 +319,32 @@ pub async fn gateway_login(app: AppHandle) -> Result<GatewayStatus, String> {
         username: login.username,
         display_name: login.display_name.filter(|name| !name.trim().is_empty()),
         expires_at: issued.expires_at.map(|v| v.as_str().map(str::to_string).unwrap_or_else(|| v.to_string())),
+        group: group_from_token(&id_token),
     };
     if let Ok(path) = status_path(&app) {
         let _ = std::fs::write(path, serde_json::to_string(&status).unwrap_or_default());
     }
     Ok(status)
+}
+
+#[cfg(test)]
+mod group_tests {
+    use super::*;
+
+    fn token(claims: &str) -> String {
+        format!("x.{}.y", URL_SAFE_NO_PAD.encode(claims))
+    }
+
+    #[test]
+    fn takes_the_first_group_without_its_path() {
+        assert_eq!(group_from_token(&token(r#"{"groups":["/srt/frontend","/srt/admin"]}"#)).as_deref(), Some("frontend"));
+        assert_eq!(group_from_token(&token(r#"{"groups":["data-team"]}"#)).as_deref(), Some("data-team"));
+    }
+
+    #[test]
+    fn no_group_when_the_claim_is_missing_or_empty() {
+        assert_eq!(group_from_token(&token(r#"{"sub":"1"}"#)), None);
+        assert_eq!(group_from_token(&token(r#"{"groups":[]}"#)), None);
+        assert_eq!(group_from_token("not-a-token"), None);
+    }
 }
