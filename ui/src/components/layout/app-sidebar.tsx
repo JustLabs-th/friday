@@ -9,7 +9,6 @@ import {
   Settings,
   SquarePen,
   Trash2,
-  LogIn,
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
@@ -330,9 +329,12 @@ export function AppSidebar({
               aria-label="Sign in"
               className={`flex min-w-0 items-center gap-2 rounded-md border border-sidebar-border bg-background px-3 py-1.5 text-sm font-medium shadow-xs hover:bg-sidebar-accent disabled:opacity-60 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0 ${signInError ? 'border-destructive text-destructive' : ''}`}
             >
-              <LogIn className="size-4 shrink-0" aria-hidden="true" />
               <span className="truncate group-data-[collapsible=icon]:hidden">
                 {signingIn ? 'Signing in…' : signInError ? 'Sign in failed, retry' : 'Sign in'}
+              </span>
+              {/* the narrow sidebar has no room for the words */}
+              <span className="hidden text-xs group-data-[collapsible=icon]:inline" aria-hidden="true">
+                In
               </span>
             </button>
           )}
