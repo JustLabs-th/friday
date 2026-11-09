@@ -30,7 +30,9 @@ function ContextBox({ threadId, running }: { threadId: string | null; running: b
     }
   }
 
-  return <ContextView usage={threadId ? engine.usage[threadId] : undefined} running={running} compacting={compacting} onCompact={() => void compact()} />;
+  // The compaction itself runs as a turn: it is going on while the chat says "Compacting context".
+  const busy = compacting || (threadId ? (engine.messages[threadId] ?? []).some(message => message.activity === 'Compacting context') : false);
+  return <ContextView usage={threadId ? engine.usage[threadId] : undefined} running={running && !busy} compacting={busy} onCompact={() => void compact()} />;
 }
 
 /** How much of the model's window the chat fills, as the engine counts it. */
@@ -68,7 +70,10 @@ export function ContextView({ usage, running, compacting, onCompact }: { usage?:
             {window &&
               rows.map(row => <div key={row.key} className={row.color} style={{ width: `${Math.min(100, (row.value / window) * 100)}%` }} />)}
           </div>
-          <ul className="mt-1 flex flex-col gap-1 text-sm">
+          {usage.stale && (
+            <p className="text-xs text-muted-foreground">Compacted. The figures below are from before; they update after the next message.</p>
+          )}
+          <ul className={`mt-1 flex flex-col gap-1 text-sm ${usage.stale ? 'opacity-50' : ''}`}>
             {rows.map(row => (
               <li key={row.key} className="flex items-center gap-2">
                 <span className={`size-2.5 shrink-0 rounded-[3px] ${row.color}`} aria-hidden="true" />
@@ -92,7 +97,7 @@ export function ContextView({ usage, running, compacting, onCompact }: { usage?:
             disabled={running || compacting}
             className="mt-2 w-fit self-end rounded-md border px-3 py-1.5 text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {compacting ? 'Compacting…' : 'Compact session'}
+            {compacting ? 'Compacting…' : running ? 'Busy…' : 'Compact session'}
           </button>
         </>
       ) : (

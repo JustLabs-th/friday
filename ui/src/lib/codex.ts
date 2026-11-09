@@ -40,7 +40,11 @@ interface WireTurn {
 export interface TokenBreakdown { total: number; input: number; cached: number; output: number; reasoning: number }
 interface RawBreakdown { totalTokens?: number; inputTokens?: number; cachedInputTokens?: number; outputTokens?: number; reasoningOutputTokens?: number }
 /** What a chat has used so far: all of it (`total`), its latest model call (`last`, about the size of the context) and the model's window. */
-export interface ThreadUsage { total: TokenBreakdown; last: TokenBreakdown; window: number | null }
+export interface ThreadUsage {
+  total: TokenBreakdown; last: TokenBreakdown; window: number | null;
+  /** The chat was just compacted: `last` is the size before it. The engine reports the new size with the next request. */
+  stale?: boolean;
+}
 interface Turn extends WireTurn {
   plan?: PlanData; approvals?: ConfirmationRequest[]; publish?: PublishNote;
   /** Milliseconds since 1970 when the turn started and ended (the clock of this computer when the engine gives none). */
@@ -73,6 +77,7 @@ function toolLabel(tool?: string) {
   return `Using tool ${tool}`;
 }
 /** How long a finished turn took: the engine's figure, else from its start and end times (this chat's clock or a loaded turn's). */
+// (a compaction turn is timed the same way)
 function elapsed(turn: Turn): number | undefined {
   if (typeof turn.durationMs === 'number') return turn.durationMs;
   if (turn.startedMs !== undefined && turn.endedMs !== undefined) return turn.endedMs - turn.startedMs;
@@ -87,12 +92,15 @@ function statusText(turn: Turn): string {
   if (!item) return 'Starting';
   // An item that has finished means the model is thinking about what to do next.
   if (item.status && !isActive(item.status) && item.type !== 'agentMessage' && item.type !== 'reasoning') return 'Thinking';
+  // A compaction has no status of its own: it is running until it has a completion time.
+  if (item.type === 'contextCompaction') return 'Compacting context';
   switch (item.type) {
     case 'reasoning': return 'Thinking';
     case 'agentMessage': return 'Writing the reply';
     case 'commandExecution': return 'Running a command';
     case 'fileChange': return 'Editing files';
     case 'webSearch': return 'Searching';
+    case 'contextCompaction': return 'Compacting context';
     case 'dynamicToolCall':
     case 'mcpToolCall': return toolLabel(item.tool);
     default: return 'Working';
@@ -162,9 +170,11 @@ function renderTurns(turns: Turn[]): Message[] {
       output: item.error?.message,
     }));
     const sources = turn.items.filter(item => item.type === 'webSearch' && item.action?.url).map(item => ({ url: item.action!.url! }));
+    const compaction = turn.items.some(item => item.type === 'contextCompaction');
     const assistant: Message = {
       id: `turn:${turn.id}`, role: 'assistant', files: [],
-      text: turn.items.filter(item => item.type === 'agentMessage').map(item => item.text || '').filter(Boolean).join('\n\n'),
+      text: turn.items.filter(item => item.type === 'agentMessage').map(item => item.text || '').filter(Boolean).join('\n\n')
+        || (compaction && turn.status === 'completed' ? 'Context compacted.' : ''),
       reasoning: reasoning.length ? { text: reasoning.flatMap(item => item.summary || []).join('\n\n'), running: isActive(turn.status) && !turn.items.some(item => item.type === 'agentMessage') } : undefined,
       // The model's own plan when it made one; otherwise one built from what it actually did.
       plan: turn.plan || derivePlan(turn.items, (users[users.length - 1]?.text || ''), isActive(turn.status)),
@@ -182,7 +192,7 @@ function renderTurns(turns: Turn[]): Message[] {
       confirmations: turn.approvals,
       errors: turn.error ? [turn.error.message] : undefined,
     };
-    return [...users, ...(assistant.text || reasoning.length || runs.length || steps.length || turn.plan || turn.error || turn.approvals?.length || turn.publish ? [assistant] : [])];
+    return [...users, ...(assistant.text || compaction || reasoning.length || runs.length || steps.length || turn.plan || turn.error || turn.approvals?.length || turn.publish ? [assistant] : [])];
   });
 }
 
@@ -354,6 +364,11 @@ class CodexClient {
         turn.approvals = turn.approvals?.map(a => a.state === 'requested' ? { ...a, state: 'resolved' } : a);
         this.running(threadId, null);
         for (const [key, request] of this.approvals) if (request.params.threadId === threadId && request.params.turnId === turnId) this.approvals.delete(key);
+        // A finished compaction leaves the chat's size unknown until the next request reports it.
+        if (turn.status === 'completed' && turn.items.some(item => item.type === 'contextCompaction')) {
+          const current = this.snapshot.usage[threadId];
+          if (current) this.update({ usage: { ...this.snapshot.usage, [threadId]: { ...current, stale: true } } });
+        }
         if (turn.status === 'completed') void this.saveWork(threadId, turnId);
         break;
       case 'error':
@@ -635,6 +650,10 @@ class CodexClient {
   /** Asks the engine to summarise the chat so far, to free room in the model's context. */
   compact = async (threadId: string) => {
     if (this.snapshot.running[threadId]) throw new Error('Wait for the session to finish before compacting its context');
+    // The engine can only compact a chat it has loaded.
+    await this.resume(threadId);
+    const readOnly = this.readOnly.get(threadId);
+    if (readOnly) throw new Error(`${readOnly}, so it cannot be compacted here`);
     await rpc('thread/compact/start', { threadId });
   };
   rename = async (threadId: string, name: string) => {
