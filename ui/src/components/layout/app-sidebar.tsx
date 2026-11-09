@@ -9,6 +9,7 @@ import {
   Settings,
   SquarePen,
   Trash2,
+  LogIn,
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
@@ -30,6 +31,7 @@ import {
 } from '@/components/ui/sidebar';
 import type { Project } from '@/components/dialogs/new-project-dialog';
 import { useGatewayStatus } from '@/hooks/use-gateway-status';
+import { gatewayLogin } from '@/lib/gateway';
 
 export type Page = 'home' | 'scheduled' | 'connectors';
 
@@ -223,6 +225,19 @@ export function AppSidebar({
 
   const gateway = useGatewayStatus();
   const userName = (gateway.signedIn && (gateway.displayName || gateway.username)) || 'Liam';
+  const [signingIn, setSigningIn] = useState(false);
+  const [signInError, setSignInError] = useState('');
+  async function signIn() {
+    setSigningIn(true);
+    setSignInError('');
+    try {
+      await gatewayLogin();
+    } catch (error) {
+      setSignInError(String(error instanceof Error ? error.message : error));
+    } finally {
+      setSigningIn(false);
+    }
+  }
 
   return (
     <Sidebar collapsible="icon" aria-label="Main navigation" className="top-11 h-[calc(100svh-2.75rem)] border-r-0">
@@ -296,14 +311,31 @@ export function AppSidebar({
 
       <SidebarFooter className="p-2">
         <div className="flex items-center justify-between gap-1 group-data-[collapsible=icon]:flex-col">
-          <div className="flex min-w-0 items-center gap-2 px-2 py-1.5 text-sm group-data-[collapsible=icon]:px-1">
-            <Avatar className="size-6 shrink-0">
-              <AvatarFallback className="bg-muted text-xs font-medium uppercase text-foreground">
-                {userName.slice(0, 1)}
-              </AvatarFallback>
-            </Avatar>
-            <span className="truncate font-medium group-data-[collapsible=icon]:hidden">{userName}</span>
-          </div>
+          {gateway.signedIn ? (
+            <div className="flex min-w-0 items-center gap-2 px-2 py-1.5 text-sm group-data-[collapsible=icon]:px-1">
+              <Avatar className="size-6 shrink-0">
+                <AvatarFallback className="bg-muted text-xs font-medium uppercase text-foreground">
+                  {userName.slice(0, 1)}
+                </AvatarFallback>
+              </Avatar>
+              <span className="truncate font-medium group-data-[collapsible=icon]:hidden">{userName}</span>
+            </div>
+          ) : (
+            // Not signed in: the sign-in button takes the place of the profile circle and name.
+            <button
+              type="button"
+              onClick={() => void signIn()}
+              disabled={signingIn}
+              title={signInError || 'Sign in with the company account'}
+              aria-label="Sign in"
+              className={`flex min-w-0 items-center gap-2 rounded-md border border-sidebar-border bg-background px-3 py-1.5 text-sm font-medium shadow-xs hover:bg-sidebar-accent disabled:opacity-60 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0 ${signInError ? 'border-destructive text-destructive' : ''}`}
+            >
+              <LogIn className="size-4 shrink-0" aria-hidden="true" />
+              <span className="truncate group-data-[collapsible=icon]:hidden">
+                {signingIn ? 'Signing in…' : signInError ? 'Sign in failed, retry' : 'Sign in'}
+              </span>
+            </button>
+          )}
           <button
             type="button"
             aria-label="Settings"
