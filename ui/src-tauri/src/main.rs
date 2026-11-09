@@ -12,6 +12,7 @@ mod platform_tools;
 mod publish;
 mod scheduler;
 mod skills;
+mod template_source;
 mod trust;
 
 /// The company package registry (Nexus).

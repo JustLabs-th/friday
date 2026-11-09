@@ -1,0 +1,14 @@
+{
+  "name": "nextjs-template",
+  "version": 7,
+  "platform": [
+    "AGENTS.md",
+    "app/globals.css",
+    "lib/user.ts",
+    "components/user-bar.tsx",
+    "components/profile-menu.tsx",
+    "components/nav-links.tsx",
+    "components/ui/button.tsx",
+    "components/ui/dropdown-menu.tsx"
+  ]
+}

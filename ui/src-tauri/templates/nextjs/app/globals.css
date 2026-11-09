@@ -1,30 +1,79 @@
 @import "tailwindcss";
 
+/* dark mode is the class "dark" on <html> (set by the theme script in the top bar: light, dark or system) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Brand colors (from the logo): yellow #FEE101, black #231917, red #EB1C24.
+   Yellow is the main color; text on yellow is always the brand black (contrast 13:1). */
 :root {
   --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --foreground: oklch(0.225 0.017 31);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --card-foreground: oklch(0.225 0.017 31);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.225 0.017 31);
+  --primary: oklch(0.906 0.188 100);
+  --primary-foreground: oklch(0.225 0.017 31);
+  --secondary: oklch(0.97 0.068 100);
+  --secondary-foreground: oklch(0.225 0.017 31);
+  --muted: oklch(0.97 0.012 92);
+  --muted-foreground: oklch(0.502 0.018 67);
+  --accent: oklch(0.97 0.068 100);
+  --accent-foreground: oklch(0.225 0.017 31);
+  --destructive: oklch(0.599 0.233 27);
+  --border: oklch(0.913 0.025 92);
+  --input: oklch(0.913 0.025 92);
+  --ring: oklch(0.8 0.166 99);
+  /* chart series: yellow, black, red, then two neutrals that stay readable on white */
+  --chart-1: oklch(0.8 0.166 99);
+  --chart-2: oklch(0.225 0.017 31);
+  --chart-3: oklch(0.599 0.233 27);
+  --chart-4: oklch(0.55 0.04 67);
+  --chart-5: oklch(0.72 0.1 60);
   --radius: 0.625rem;
+  /* the top bar is brand black in both themes */
+  --bar: oklch(0.225 0.017 31);
+  --bar-foreground: oklch(1 0 0);
+  color-scheme: light;
+}
+
+.dark {
+  --background: oklch(0.17 0.01 31);
+  --foreground: oklch(0.96 0.01 92);
+  --card: oklch(0.21 0.012 31);
+  --card-foreground: oklch(0.96 0.01 92);
+  --popover: oklch(0.23 0.014 31);
+  --popover-foreground: oklch(0.96 0.01 92);
+  --primary: oklch(0.906 0.188 100);
+  --primary-foreground: oklch(0.225 0.017 31);
+  --secondary: oklch(0.29 0.03 80);
+  --secondary-foreground: oklch(0.96 0.01 92);
+  --muted: oklch(0.26 0.012 31);
+  --muted-foreground: oklch(0.72 0.02 67);
+  --accent: oklch(0.3 0.04 90);
+  --accent-foreground: oklch(0.96 0.01 92);
+  --destructive: oklch(0.66 0.22 27);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.8 0.166 99);
+  --chart-1: oklch(0.86 0.18 100);
+  --chart-2: oklch(0.92 0.01 92);
+  --chart-3: oklch(0.66 0.22 27);
+  --chart-4: oklch(0.7 0.04 67);
+  --chart-5: oklch(0.78 0.12 60);
+  --bar: oklch(0.13 0.01 31);
+  color-scheme: dark;
 }
 
 @theme inline {
+  --color-bar: var(--bar);
+  --color-bar-foreground: var(--bar-foreground);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
@@ -37,6 +86,11 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
