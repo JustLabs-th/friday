@@ -37,7 +37,7 @@ function DotsSpinner() {
       {[0, 1, 3, 2].map((delay, index) => (
         <span
           key={index}
-          className="size-1.5 animate-pulse rounded-full bg-orange-500 motion-reduce:animate-none"
+          className="size-1.5 animate-pulse rounded-full bg-violet-500 motion-reduce:animate-none"
           style={{ animationDelay: `${delay * 0.25}s`, animationDuration: '1s' }}
         />
       ))}
