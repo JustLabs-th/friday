@@ -1,0 +1,12 @@
+[package]
+name = "liam-setup"
+version = "0.1.0"
+edition = "2021"
+description = "Run by the Liam installer: trust the company CA and set the company host names"
+
+[workspace]
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true

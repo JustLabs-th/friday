@@ -1,0 +1,51 @@
+{
+  "name": "__NAME__",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": "24.x"
+  },
+  "dependencies": {
+    "@tailwindcss/postcss": "4.3.3",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "cn": "0.5.2",
+    "drizzle-orm": "0.45.4",
+    "echarts": "6.1.0",
+    "lucide-react": "1.68.0",
+    "motion": "14.7.1",
+    "next": "16.4.3",
+    "pg": "8.23.1",
+    "radix-ui": "1.8.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "recharts": "3.10.1",
+    "tailwind-merge": "3.7.0",
+    "tailwindcss": "4.3.3",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/node": "24.19.2",
+    "@types/pg": "8.23.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "drizzle-kit": "0.31.11",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.4.3",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  },
+  "overrides": {
+    "@esbuild-kit/core-utils": {
+      "esbuild": "0.25.12"
+    }
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  }
+}

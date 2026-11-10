@@ -109,9 +109,9 @@ use codex_protocol::protocol::AskForApproval;
 use codex_protocol::user_input::UserInput;
 use codex_terminal_detection::TerminalName;
 
-/// Codex CLI
+/// Liam engine
 ///
-/// If no subcommand is specified, options will be forwarded to the interactive CLI.
+/// Started by the Liam app; it is not meant to be run by hand.
 #[derive(Debug, Parser)]
 #[clap(
     author,
@@ -121,8 +121,9 @@ use codex_terminal_detection::TerminalName;
     // The executable is sometimes invoked via a platform‑specific name like
     // `codex-x86_64-unknown-linux-musl`, but the help output should always use
     // the generic `codex` command name that users run.
-    bin_name = "codex",
-    override_usage = "codex [OPTIONS] [PROMPT]\n       codex [OPTIONS] <COMMAND> [ARGS]"
+    name = "liam-engine",
+    bin_name = "liam-engine",
+    override_usage = "liam-engine <COMMAND> [ARGS]"
 )]
 struct MultitoolCli {
     #[clap(flatten)]
@@ -1099,6 +1100,13 @@ async fn dispatch_cli(
     reject_root_strict_config_for_subcommand(root_strict_config, &subcommand)?;
     if let Some(subcommand) = subcommand.as_ref() {
         profile_v2_for_subcommand(&interactive, subcommand)?;
+    }
+
+    // Liam runs this engine as a background service. The interactive screen (sign-in choices and all)
+    // is not part of the product, so opening the engine by hand just explains that and stops.
+    if matches!(&subcommand, None | Some(Subcommand::Agents(_))) {
+        eprintln!("Liam engine runs in the background for the Liam app.\nOpen Liam from the Start menu instead.");
+        std::process::exit(2);
     }
 
     let launch_tui = move |interactive, remote, auth_token_env, arg0_paths| async move {

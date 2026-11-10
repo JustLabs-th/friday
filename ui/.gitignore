@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.artifacts/
+*.tsbuildinfo
+src-tauri/engine/
+src-tauri/installer/liam-setup.exe
+helper/target/

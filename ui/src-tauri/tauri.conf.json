@@ -1,0 +1,47 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Liam",
+  "mainBinaryName": "liam",
+  "version": "0.1.0",
+  "identifier": "srt.digitalx.liam",
+  "build": {
+    "devUrl": "http://127.0.0.1:5173",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Liam",
+        "width": 1280,
+        "height": 850,
+        "minWidth": 360,
+        "minHeight": 540,
+        "decorations": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' ipc: http://ipc.localhost ws://127.0.0.1:5173; frame-src http://localhost:* http://127.0.0.1:*"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
+    "resources": {
+      "installer/liam-setup.exe": "installer/liam-setup.exe",
+      "templates/nextjs": "templates/nextjs",
+      "installer/srt-platform-root-ca.crt": "installer/srt-platform-root-ca.crt",
+      "engine/liam-engine.exe": "engine/liam-engine.exe",
+      "engine/LICENSE": "engine/LICENSE",
+      "engine/NOTICE": "engine/NOTICE"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "perMachine",
+        "installerHooks": "installer/hooks.nsh"
+      }
+    }
+  }
+}

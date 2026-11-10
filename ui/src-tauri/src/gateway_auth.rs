@@ -1,0 +1,457 @@
+//! Sign in to the company LLM gateway.
+//!
+//! The browser does the Keycloak sign-in (OIDC authorization code + PKCE, redirecting to a loopback
+//! port). The ID token is then presented to the key portal, which issues this person's virtual key.
+//! The key goes straight into the OS credential store: the frontend only ever sees who is signed in.
+
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use rand::RngCore;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::path::PathBuf;
+use std::time::Duration;
+use tauri::{AppHandle, Manager};
+use tauri_plugin_opener::OpenerExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpListener;
+
+const SERVICE: &str = "friday";
+const KEY_ENTRY: &str = "gateway-key";
+const LOGIN_TIMEOUT: Duration = Duration::from_secs(180);
+
+struct Config {
+    issuer: String,
+    client_id: String,
+    redirect_uri: String,
+    portal_url: String,
+}
+
+/// Defaults match the company deployment; each can be overridden with an environment variable.
+fn config() -> Result<Config, String> {
+    let get = |name: &str, default: &str| std::env::var(name).unwrap_or_else(|_| default.to_string());
+    let cfg = Config {
+        issuer: get("FRIDAY_OIDC_ISSUER", "https://sso.digitalx.srt/auth/realms/srt").trim_end_matches('/').to_string(),
+        client_id: get("FRIDAY_OIDC_CLIENT_ID", "meshroom-ai"),
+        redirect_uri: get("FRIDAY_OIDC_REDIRECT_URI", "http://127.0.0.1:41829/callback"),
+        portal_url: get("FRIDAY_PORTAL_URL", "https://key-portal.digitalx.srt").trim_end_matches('/').to_string(),
+    };
+    for (name, url) in [("issuer", &cfg.issuer), ("portal", &cfg.portal_url)] {
+        if !url.starts_with("https://") {
+            return Err(format!("The {name} URL must be https."));
+        }
+    }
+    Ok(cfg)
+}
+
+#[derive(Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GatewayStatus {
+    pub signed_in: bool,
+    pub username: Option<String>,
+    /// The person's name from SSO, when the directory has one.
+    pub display_name: Option<String>,
+    pub expires_at: Option<String>,
+    /// The person's first Keycloak group (last part of its path), used to file their apps on the dashboard.
+    #[serde(default)]
+    pub group: Option<String>,
+    /// What the company sign-in says about the person, shown in Settings. Absent for a session made before this existed.
+    #[serde(default)]
+    pub profile: Option<Profile>,
+}
+
+/// The person's details from the sign-in token, for display only (never used to decide access).
+#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Profile {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub employee_id: String,
+    #[serde(default)]
+    pub email: String,
+    #[serde(default)]
+    pub factory: String,
+    #[serde(default)]
+    pub section: String,
+    #[serde(default)]
+    pub department: String,
+    #[serde(default)]
+    pub groups: Vec<String>,
+    #[serde(default)]
+    pub roles: Vec<String>,
+}
+
+fn claim_text(claims: &serde_json::Value, key: &str) -> String {
+    claims.get(key).and_then(|v| v.as_str()).unwrap_or("").trim().to_string()
+}
+
+fn claim_list(value: Option<&serde_json::Value>) -> Vec<String> {
+    value
+        .and_then(|v| v.as_array())
+        .map(|items| items.iter().filter_map(|i| i.as_str()).map(|g| g.trim().trim_end_matches('/').rsplit('/').next().unwrap_or("").trim().to_string()).filter(|g| !g.is_empty()).collect())
+        .unwrap_or_default()
+}
+
+/// The person's details from an ID token (name, employee code, email, factory, section, department, groups, roles).
+pub(crate) fn profile_from_token(id_token: &str) -> Option<Profile> {
+    let payload = id_token.split('.').nth(1)?;
+    let bytes = URL_SAFE_NO_PAD.decode(payload.trim_end_matches('=')).ok()?;
+    let claims: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    let name = {
+        let full = claim_text(&claims, "name");
+        if full.is_empty() {
+            [claim_text(&claims, "given_name"), claim_text(&claims, "family_name")].into_iter().filter(|p| !p.is_empty()).collect::<Vec<_>>().join(" ")
+        } else {
+            full
+        }
+    };
+    let employee_id = [claim_text(&claims, "employee_id"), claim_text(&claims, "employeeId"), claim_text(&claims, "preferred_username")]
+        .into_iter()
+        .find(|v| !v.is_empty())
+        .unwrap_or_default();
+    let department = [claim_text(&claims, "dept"), claim_text(&claims, "department")].into_iter().find(|v| !v.is_empty()).unwrap_or_default();
+    Some(Profile {
+        name,
+        employee_id,
+        email: claim_text(&claims, "email"),
+        factory: claim_text(&claims, "factory"),
+        section: claim_text(&claims, "section"),
+        department,
+        groups: claim_list(claims.get("groups")),
+        roles: claim_list(claims.get("realm_access").and_then(|r| r.get("roles"))),
+    })
+}
+
+/// The first entry of the "groups" claim in an ID token, without its path ("/srt/frontend" -> "frontend").
+/// Only used to label things; the token is not trusted for access here.
+pub(crate) fn group_from_token(id_token: &str) -> Option<String> {
+    let payload = id_token.split('.').nth(1)?;
+    let bytes = URL_SAFE_NO_PAD.decode(payload.trim_end_matches('=')).ok()?;
+    let claims: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    let first = claims.get("groups")?.as_array()?.iter().find_map(|g| g.as_str())?;
+    let name = first.trim().trim_end_matches('/').rsplit('/').next()?.trim();
+    (!name.is_empty()).then(|| name.to_string())
+}
+
+/// The signed-in person's group, if the sign-in gave one.
+pub(crate) fn current_group(app: &AppHandle) -> Option<String> {
+    let status = read_status(app);
+    status.group.filter(|_| status.signed_in)
+}
+
+fn status_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.join("gateway-session.json"))
+}
+
+fn entry() -> Result<keyring::Entry, String> {
+    keyring::Entry::new(SERVICE, KEY_ENTRY).map_err(|e| e.to_string())
+}
+
+/// The stored gateway key, for the code that configures Liam. Never sent to the frontend.
+pub fn stored_key() -> Option<String> {
+    entry().ok()?.get_password().ok()
+}
+
+const CATALOG: &str = include_str!("../resources/gateway-catalog.json");
+const GATEWAY_MODEL: &str = "llama/qwen3.8-27b";
+
+/// What Liam needs to use the gateway: command-line settings that override its config for this run
+/// only (the user's `~/.codex/config.toml` is untouched) and the key as an environment variable.
+/// `None` when nobody is signed in, so Liam runs with its usual configuration.
+pub fn codex_launch(app: &AppHandle) -> Option<(Vec<String>, String)> {
+    let key = stored_key()?;
+    let dir = app.path().app_data_dir().ok()?;
+    std::fs::create_dir_all(&dir).ok()?;
+    let catalog = dir.join("gateway-catalog.json");
+    std::fs::write(&catalog, CATALOG).ok()?;
+    let base = std::env::var("FRIDAY_GATEWAY_URL").unwrap_or_else(|_| "https://bifrost.digitalx.srt/v1".into());
+    let path = catalog.to_string_lossy().trim_start_matches(r"\\?\").replace('\\', "/");
+    let q = |v: &str| serde_json::to_string(v).unwrap_or_default();
+    let mut args = Vec::new();
+    for setting in [
+        format!("model_provider={}", q("friday_gateway")),
+        format!("model={}", q(GATEWAY_MODEL)),
+        format!("model_catalog_json={}", q(&path)),
+        format!("model_providers.friday_gateway.name={}", q("Company gateway")),
+        format!("model_providers.friday_gateway.base_url={}", q(&base)),
+        format!("model_providers.friday_gateway.env_key={}", q(GATEWAY_KEY_ENV)),
+        format!("model_providers.friday_gateway.wire_api={}", q("responses")),
+    ] {
+        args.push("-c".to_string());
+        args.push(setting);
+    }
+    Some((args, key))
+}
+
+pub const GATEWAY_KEY_ENV: &str = "FRIDAY_GATEWAY_KEY";
+
+fn read_status(app: &AppHandle) -> GatewayStatus {
+    let has_key = stored_key().is_some();
+    let saved: GatewayStatus = status_path(app)
+        .ok()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default();
+    GatewayStatus { signed_in: has_key, ..saved }
+}
+
+/// Where this person's sessions, settings and cache live (`~/.liam`): one folder per signed-in user, so a PC shared
+/// by several people (or one person signing in as someone else) never shows another user's history.
+/// Never the user's own `~/.codex`: that belongs to whatever Codex they use themselves, and Liam must
+/// neither read nor write it. Before anyone has signed in (or without a usable name) a shared
+/// `~/.liam/default` folder is used instead.
+pub fn user_home(app: &AppHandle) -> Option<PathBuf> {
+    let status = read_status(app);
+    let name: String = status
+        .username
+        .filter(|_| status.signed_in)
+        .unwrap_or_default()
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') { c } else { '_' })
+        .collect();
+    // Under the home folder like other tools (`~/.codex`), so it is easy to find, back up or sync, and
+    // does not depend on the app's identifier the way the app-data folder does.
+    let root = app.path().home_dir().ok()?.join(".liam");
+    let dir = if name.is_empty() || name.chars().all(|c| c == '.') {
+        root.join("default")
+    } else {
+        root.join("users").join(name)
+    };
+    std::fs::create_dir_all(&dir).ok()?;
+    Some(dir)
+}
+
+#[tauri::command]
+pub fn gateway_status(app: AppHandle) -> GatewayStatus {
+    read_status(&app)
+}
+
+#[tauri::command]
+pub fn gateway_logout(app: AppHandle) -> Result<GatewayStatus, String> {
+    if let Ok(e) = entry() {
+        let _ = e.delete_credential();
+    }
+    if let Ok(p) = status_path(&app) {
+        let _ = std::fs::remove_file(p);
+    }
+    Ok(GatewayStatus::default())
+}
+
+pub(crate) fn random_b64(bytes: usize) -> String {
+    let mut buf = vec![0u8; bytes];
+    rand::thread_rng().fill_bytes(&mut buf);
+    URL_SAFE_NO_PAD.encode(buf)
+}
+
+#[derive(Deserialize)]
+struct TokenResponse {
+    id_token: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct IssuedKey {
+    key_value: String,
+    expires_at: Option<serde_json::Value>,
+}
+
+#[derive(Deserialize)]
+struct PortalLogin {
+    username: Option<String>,
+    display_name: Option<String>,
+}
+
+const DONE_PAGE: &str = "<!doctype html><meta charset=utf-8><title>Friday</title>\
+<body style=\"font-family:system-ui;margin:4rem auto;max-width:28rem;text-align:center\">\
+<h2>เข้าสู่ระบบแล้ว</h2><p>กลับไปที่ Friday ได้เลย ปิดหน้านี้ได้</p></body>";
+
+/// Waits for the browser to come back to the loopback redirect and returns the authorization code.
+pub(crate) async fn wait_for_code(listener: TcpListener, expected_state: &str) -> Result<String, String> {
+    loop {
+        let (mut stream, _) = listener.accept().await.map_err(|e| e.to_string())?;
+        let mut buf = vec![0u8; 8192];
+        let n = stream.read(&mut buf).await.map_err(|e| e.to_string())?;
+        let request = String::from_utf8_lossy(&buf[..n]);
+        let target = request.lines().next().unwrap_or("").split_whitespace().nth(1).unwrap_or("").to_string();
+        let Ok(url) = url::Url::parse(&format!("http://127.0.0.1{target}")) else { continue };
+        if url.path() != "/callback" {
+            let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await;
+            continue;
+        }
+        let param = |name: &str| url.query_pairs().find(|(k, _)| k == name).map(|(_, v)| v.to_string());
+        let (status, body, result) = if param("state").as_deref() != Some(expected_state) {
+            ("400 Bad Request", "State did not match.".to_string(), Err("The sign-in response did not match this request.".to_string()))
+        } else if let Some(err) = param("error") {
+            ("400 Bad Request", "Sign-in was not completed.".to_string(), Err(format!("Sign-in was refused: {err}")))
+        } else if let Some(code) = param("code") {
+            ("200 OK", DONE_PAGE.to_string(), Ok(code))
+        } else {
+            ("400 Bad Request", "No code.".to_string(), Err("The sign-in response had no code.".to_string()))
+        };
+        let response = format!(
+            "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        let _ = stream.write_all(response.as_bytes()).await;
+        let _ = stream.shutdown().await;
+        return result;
+    }
+}
+
+/// Opens the browser for the company sign-in and returns the person's ID token (and the HTTP client used).
+async fn sso_id_token(app: &AppHandle, cfg: &Config) -> Result<(String, reqwest::Client), String> {
+    let redirect = url::Url::parse(&cfg.redirect_uri).map_err(|e| e.to_string())?;
+    if redirect.host_str() != Some("127.0.0.1") {
+        return Err("The redirect address must be 127.0.0.1.".into());
+    }
+    let port = redirect.port().ok_or("The redirect address needs a fixed port.")?;
+    let listener = TcpListener::bind(("127.0.0.1", port))
+        .await
+        .map_err(|e| format!("Port {port} is in use (is another app signing in?): {e}"))?;
+
+    let verifier = random_b64(48);
+    let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
+    let state = random_b64(24);
+    let mut auth = url::Url::parse(&format!("{}/protocol/openid-connect/auth", cfg.issuer)).map_err(|e| e.to_string())?;
+    auth.query_pairs_mut()
+        .append_pair("response_type", "code")
+        .append_pair("client_id", &cfg.client_id)
+        .append_pair("redirect_uri", &cfg.redirect_uri)
+        .append_pair("scope", "openid profile email")
+        .append_pair("state", &state)
+        .append_pair("code_challenge", &challenge)
+        .append_pair("code_challenge_method", "S256");
+    app.opener().open_url(auth.as_str(), None::<&str>).map_err(|e| e.to_string())?;
+
+    let code = tokio::time::timeout(LOGIN_TIMEOUT, wait_for_code(listener, &state))
+        .await
+        .map_err(|_| "Sign-in timed out. Try again.".to_string())??;
+
+    let http = crate::trust::http_builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(20))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let token: TokenResponse = http
+        .post(format!("{}/protocol/openid-connect/token", cfg.issuer))
+        .form(&[
+            ("grant_type", "authorization_code"),
+            ("code", code.as_str()),
+            ("redirect_uri", cfg.redirect_uri.as_str()),
+            ("client_id", cfg.client_id.as_str()),
+            ("code_verifier", verifier.as_str()),
+        ])
+        .send()
+        .await
+        .map_err(|e| format!("Could not reach the sign-in server: {e}"))?
+        .error_for_status()
+        .map_err(|e| format!("The sign-in server refused the code: {e}"))?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    let id_token = token.id_token.ok_or("The sign-in server returned no ID token.")?;
+    Ok((id_token, http))
+}
+
+/// Opens the browser for Keycloak, then trades the result for a gateway key held in the credential store.
+#[tauri::command]
+pub async fn gateway_login(app: AppHandle) -> Result<GatewayStatus, String> {
+    let cfg = config()?;
+    let (id_token, http) = sso_id_token(&app, &cfg).await?;
+
+    let portal = |path: &str| {
+        http.post(format!("{}{}", cfg.portal_url, path)).bearer_auth(&id_token)
+    };
+    let login: PortalLogin = portal("/api/login")
+        .send()
+        .await
+        .map_err(|e| format!("Could not reach the key portal: {e}"))?
+        .error_for_status()
+        .map_err(|e| format!("The key portal refused this account: {e}"))?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    // Issuing rotates: any key this person already holds (in another app) stops working.
+    let issued: IssuedKey = portal("/api/key/issue")
+        .send()
+        .await
+        .map_err(|e| format!("Could not reach the key portal: {e}"))?
+        .error_for_status()
+        .map_err(|e| format!("The key portal could not issue a key: {e}"))?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    entry()?.set_password(&issued.key_value).map_err(|e| format!("Could not save the key: {e}"))?;
+    let status = GatewayStatus {
+        signed_in: true,
+        username: login.username,
+        display_name: login.display_name.filter(|name| !name.trim().is_empty()),
+        expires_at: issued.expires_at.map(|v| v.as_str().map(str::to_string).unwrap_or_else(|| v.to_string())),
+        group: group_from_token(&id_token),
+        profile: profile_from_token(&id_token),
+    };
+    if let Ok(path) = status_path(&app) {
+        let _ = std::fs::write(path, serde_json::to_string(&status).unwrap_or_default());
+    }
+    Ok(status)
+}
+
+/// Reads the person's details from the company sign-in again, without issuing a new gateway key (so keys held in
+/// other apps keep working). For a sign-in made before the details were kept. The browser opens for a moment;
+/// being signed in to the company already, it normally goes straight back.
+#[tauri::command]
+pub async fn gateway_refresh_profile(app: AppHandle) -> Result<GatewayStatus, String> {
+    let mut status = read_status(&app);
+    if !status.signed_in {
+        return Err("Sign in first.".into());
+    }
+    let cfg = config()?;
+    let (id_token, _) = sso_id_token(&app, &cfg).await?;
+    status.group = group_from_token(&id_token);
+    status.profile = profile_from_token(&id_token);
+    if let Ok(path) = status_path(&app) {
+        let _ = std::fs::write(path, serde_json::to_string(&status).unwrap_or_default());
+    }
+    Ok(status)
+}
+
+#[cfg(test)]
+mod group_tests {
+    use super::*;
+
+    fn token(claims: &str) -> String {
+        format!("x.{}.y", URL_SAFE_NO_PAD.encode(claims))
+    }
+
+    #[test]
+    fn takes_the_first_group_without_its_path() {
+        assert_eq!(group_from_token(&token(r#"{"groups":["/srt/frontend","/srt/admin"]}"#)).as_deref(), Some("frontend"));
+        assert_eq!(group_from_token(&token(r#"{"groups":["data-team"]}"#)).as_deref(), Some("data-team"));
+    }
+
+    #[test]
+    fn no_group_when_the_claim_is_missing_or_empty() {
+        assert_eq!(group_from_token(&token(r#"{"sub":"1"}"#)), None);
+        assert_eq!(group_from_token(&token(r#"{"groups":[]}"#)), None);
+        assert_eq!(group_from_token("not-a-token"), None);
+    }
+
+    #[test]
+    fn reads_the_profile_the_directory_sends() {
+        let claims = r#"{"preferred_username":"015298","name":"Nobparat Bunchalor","email":"a@b.th","factory":"fac2","section":"FA","dept":"Digital Transformation","groups":["FA","/srt/llm-users"],"realm_access":{"roles":["ai-user"]}}"#;
+        let profile = profile_from_token(&token(claims)).expect("profile");
+        assert_eq!(profile.employee_id, "015298");
+        assert_eq!(profile.name, "Nobparat Bunchalor");
+        assert_eq!((profile.factory.as_str(), profile.section.as_str(), profile.department.as_str()), ("fac2", "FA", "Digital Transformation"));
+        assert_eq!(profile.groups, vec!["FA", "llm-users"]);
+        assert_eq!(profile.roles, vec!["ai-user"]);
+        // a token with little in it still gives a profile, with the rest empty
+        let small = profile_from_token(&token(r#"{"preferred_username":"1","given_name":"A","family_name":"B"}"#)).unwrap();
+        assert_eq!((small.name.as_str(), small.employee_id.as_str(), small.section.as_str()), ("A B", "1", ""));
+        assert_eq!(profile_from_token("not-a-token"), None);
+    }
+}
